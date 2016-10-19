@@ -40,7 +40,7 @@ void slap() {
 /* The text file, named "testy" located in the same directory...
 ROOM NAME: ReticentRoom
 CONNECTION 1: Richard
-CONNECTION 2: Stallma
+CONNECTION 2: Stallman
 CONNECTION 3: was
 CONNECTION 4: here!!!!!
 ROOM TYPE: ROMPER_ROOM
