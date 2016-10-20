@@ -16,7 +16,7 @@
 #define NUM_ROOMS 7			// Number of room in the graph.
 #define NUM_ROOM_NAMES 10	// Number of room names to choose from.
 #define NAME_BUFFER_LEN 9	// User input buffer length - magenta + 1 for '\0' + 1 for \n from fgets().
-#define TYPE_BUFFER 11		// Room type enumeration START_ROOM /= 1 for '\0'.
+#define TYPE_BUFFER 11		// Room type enumeration START_ROOM + 1 for '\0'.
 #define MAX_LOOP 250		// Inhibits infinite loop while generating room connections.
 #define MAX_READ 12			// Max chars to read back in function readRoom().
 
@@ -48,7 +48,8 @@ struct room rooms_list[NUM_ROOMS];
 int roomSelector[10] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
 // Rooms created name storage array - helper for populating rooms_list.
 char selected[7][8];
-int mem0=0, mem1;
+// Declare rooms_rbi[7] array of type struct room for the 7 randomly "read back in" (rbi) rooms. 
+struct room rooms_rbi[NUM_ROOMS];
 
 // Function prototypes.
 int getRand3_6();
@@ -58,12 +59,12 @@ void make_rooms();
 void connect(int, int, struct room rooms_list[NUM_ROOMS]);
 bool ok2connect(int, int, struct room rooms_list[NUM_ROOMS]);
 void writeRooms(struct room rooms[NUM_ROOMS]);
-struct room* readAllRooms();
+struct room* readAllRooms(struct room rooms[NUM_ROOMS]);
 struct room readRoom(char *);
 char *getName(char *);
 struct room *getRoom(char *);
-void runGame(struct room *);
-//void runGame();
+//void runGame(struct room *);
+void runGame();
 void printConns(struct room *);
 void theEnd(int, struct room **, int);
 void print_room(int);
@@ -72,16 +73,14 @@ void tellTime();
 void memCleaner(struct room *);
 
 int main() {
-	tellTime();
-	time_t t;								// Declare a time_t var. [ ]
-	srand((unsigned)time(&t));				// Seed the random number generator.
-	pickRoomNames(room_names);				// Generate random unique list of rooms.
-	make_rooms();							// Make rooms and connect graph datastructure.
-	writeRooms(rooms_list);					// Write rooms to specified child directory.
-	struct room *read_room = readAllRooms();	// Read rooms from specified child directory.
-	runGame(read_room);						// Run the game!
-//	runGame();
-	memCleaner(read_room);
+	time_t t;									// Declare a time_t var. [ ]
+	srand((unsigned)time(&t));					// Seed the random number generator.
+	pickRoomNames(room_names);					// Generate random unique list of rooms.
+	make_rooms();								// Make rooms and connect graph datastructure.
+	writeRooms(rooms_list);						// Write rooms to specified child directory.
+	struct room *read_room = readAllRooms(rooms_rbi);	// Read rooms from specified child directory.
+	runGame(read_room);							// Run the game!
+	memCleaner(read_room);						// Manage memory.
 	return 0;
 }
 
@@ -206,8 +205,8 @@ bool ok2connect(int rm1, int rm2, struct room rooms_list[NUM_ROOMS]) {
 // Write the room data to the hard coded directory.
 void writeRooms(struct room rooms[NUM_ROOMS]) {
 	// Build directory string.
-	char *dirName = malloc(sizeof(char) * 19);
-	char myRooms[] = "kearns.rooms.";
+	char *dirName = malloc(sizeof(char) * 20);
+	char myRooms[] = "kearnsc.rooms.";
 	sprintf(dirName, "%s%d", myRooms, getpid());
 
 	// Create the directory in parent(current) directory.
@@ -249,26 +248,27 @@ void writeRooms(struct room rooms[NUM_ROOMS]) {
 
 
 // Recreate the rooms structure by reading in the files.
-struct room* readAllRooms() {
-	struct room *rooms = malloc(NUM_ROOMS * sizeof(struct room));
-	int room_count = 0;
+struct room* readAllRooms(struct room rooms[NUM_ROOMS]) {
+
 	// Build directory string.
-	char *dirName = malloc(sizeof(char) * 19);
-	char myRooms[] = "kearns.rooms.";
+	char *dirName = malloc(sizeof(char) * 20);
+	char myRooms[] = "kearnsc.rooms.";
 	sprintf(dirName, "%s%d", myRooms, getpid());
 
 	// Change to child directory.
 	chdir(dirName);
-	// Make sure directory exists.
-	DIR *dp;											// [ ]
+	// Open dir and read in each room file.	[ ]
+	DIR *dp;
 	struct dirent *dir;
 	dp = opendir(".");
+
+	int count = 0;
 	if (dp) {
 		// Read the rooms individually fromn the directory.
-		while ((dir = readdir(dp)) != NULL) {
+		while ((dir = readdir(dp)) != NULL || count < NUM_ROOMS) {
 			if (dir->d_name[0] != '.') {
-				mem0++;
-				rooms[room_count] = readRoom(dir->d_name);
+				rooms[count] = readRoom(dir->d_name);
+				count++;
 			}
 		}
 	}
@@ -287,39 +287,43 @@ struct room* readAllRooms() {
 
 
 // Read and return a single room from file.
-struct room readRoom(char *name) {
-	printf("%s\n", name);
+struct room readRoom(char *rmName) {
 	// Declare a struct room.
 	struct room aRoom;
 	// Open the file by name parameter.
-	FILE *fp = fopen(name, "r");
+	FILE *fp = fopen(rmName, "r");
 	// Declare a c-string container for reading. 
-	char received_name[MAX_READ];
-
-	fscanf(fp, "ROOM NAME: %s\n", name);
-	aRoom.name = getName(name);
+	char *str = malloc(sizeof(char) * MAX_READ);
+	// Retrive the room name.
+	fscanf(fp, "ROOM NAME: %s\n", str);
+	aRoom.name = malloc(sizeof(char) * MAX_READ);
+	strcpy(aRoom.name, str);				// valgrind core dump...? May need to malloc str...
 
 	int read;
-	int conn_number;
-	while ((read = fscanf(fp, "CONNECTION %d: %s\n", &conn_number, received_name)) != 0 && read != EOF) {
-		aRoom.conns[conn_number - 1] = getRoom(received_name);
+	int conn_num;
+	// Retrieve the room connection's connection number and name.
+	while ((read = fscanf(fp, "CONNECTION %d: %s\n", &conn_num, str)) != 0 && read != EOF) {
+		aRoom.conns[conn_num - 1] = getRoom(str);
 	}
-	aRoom.num_conns = conn_number - 1;
+	aRoom.num_conns = conn_num;
 
 	// Read ROOM TYPE and assign to aRoom.
-	fscanf(fp, "ROOM TYPE: %s\n", received_name);
+	fscanf(fp, "ROOM TYPE: %s\n", str);
+
 	// Determine and set aRoom's type.
-	if (strcmp(name, "START_ROOM") == 0) {
+	if (strcmp(str, "START_ROOM") == 0) {
 		aRoom.type = START_ROOM;
-		mem1 = mem0;
 	}
-	else if (strcmp(name, "END_ROOM") == 0) {
+	else if (strcmp(str, "END_ROOM") == 0) {
 		aRoom.type = END_ROOM;
 	}
 	else {
 		aRoom.type = MID_ROOM;
 	}
 	fclose(fp);
+
+//	memset(&str[0], 0, sizeof(str));
+	free(str);
 
 //	print1Room(&aRoom);
 
@@ -354,9 +358,30 @@ struct room *getRoom(char *roomName) {
 
 // Main game loop.
 void runGame(struct room *read_room) {
+	// Determine and set start roon index.
+	int i, cur;
+	char col[NAME_BUFFER_LEN];
+
+	for (i = 0; i < NUM_ROOMS; i++) {
+		if (rooms_list[i].type == START_ROOM) {
+			strcpy(col, rooms_list[i].name);
+		}
+	}
+
+	for (i = 0; i < NUM_ROOMS; i++) {
+		if (read_room[i].type == START_ROOM) {
+			cur = i;
+			strcpy(read_room[i].name, col);
+		}
+	}
+
+//	printf("cur = %i\n", cur);
+
 	// Set current room to start room.
-//	struct room *current_room = &rooms_list[0];
-	struct room *current_room = &read_room[mem1];
+	struct room *current_room = &read_room[cur];
+
+//	print1Room(current_room);
+
 
 	// Allocate an array to hold the list of visited rooms.
 	struct room **visited = malloc(sizeof(struct room*) * NUM_ROOMS);
@@ -385,7 +410,6 @@ void runGame(struct room *read_room) {
 		buffer[strlen(buffer) - 1] = '\0';
 
 		// Compare the user's input with all of the connections
-		int i;
 		for (i = 0; i < current_room->num_conns; i++) {
 			// If connection matches user input.
 			if (strncmp(buffer, current_room->conns[i]->name, NAME_BUFFER_LEN) == 0) {
@@ -401,6 +425,11 @@ void runGame(struct room *read_room) {
 				visited_index++;
 				num_steps++;
 				//Set skipHuh
+				skip_Huh = false;
+				break;
+			}
+			else if (strncmp(buffer, "time", 4) == 0) {
+				tellTime();
 				skip_Huh = false;
 				break;
 			}
@@ -443,22 +472,23 @@ void printConns(struct room *aRoom) {
 }
 
 
-// Prints out a room's connections by int for debugging.
+// Prints out a room's members by int (for debugging).
 void print_room(int room) {
-	printf("name: %s\nnum_conns %d\nmax_conns %d\n",
+	printf("name: %s\nnum_conns %d\nmax_conns %d\ntype %i\n",
 		rooms_list[room].name,
 		rooms_list[room].num_conns,
-		rooms_list[room].max_conns
+		rooms_list[room].max_conns,
+		rooms_list[room].type
 	);
 	int i;
 	for (i = 0; i < rooms_list[room].num_conns; i++) {
-		printf("connection: %s\n", rooms_list[room].conns[i]->name);
+		printf("CONNECTION %d: %s\n", i+1, rooms_list[room].conns[i]->name);
 	}
 	printf("\n");
 }
 
 
-// Prints out a single room's members for debugging.
+// Prints out a single room's members by struct room* (for debugging).
 void print1Room(struct room *aRoom) {
 	printf("name: %s\nnum_conns %d\nmax_conns %d\ntype %i\n",
 		aRoom->name,
@@ -468,7 +498,7 @@ void print1Room(struct room *aRoom) {
 	);
 	int i;
 	for (i = 0; i < aRoom->num_conns; i++) {
-		printf("%s's conn[%d]: %s\n", aRoom->name, i, aRoom->conns[i]->name);
+		printf("CONNECTION %d: %s\n", i+1, aRoom->conns[i]->name);
 	}
 	printf("\n");
 }
@@ -477,29 +507,56 @@ void print1Room(struct room *aRoom) {
 void tellTime() {							// [ ]
 	time_t result = time(NULL);
 	struct tm *t = localtime(&result);
-	// Format time strings and ints...
+	// Format time strings and int modifiers...
 	int hour = t->tm_hour;
 	int ap = 0;
-	if (hour > 11) { ap = 1; }
-	if (hour > 12) { hour -= 12; }
+	if (hour > 11) { ap = 1; }				// am or pm.
+	char *am_pm[2] = { "am", "pm" };
+	if (hour > 12) { hour -= 12; }			// No 24 hour military time here!
 	int min = t->tm_min;
+	char *zero[2] = { "\0", "0" };			// modifier for preceding 0, like 13:01
+	int preMin = 0;						// so that we can avoid
+	if (min < 10 && min >= 0) { preMin = 1; }	// this scenario: 13:1
 	char *wkDay[7] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
 	int day = t->tm_wday;
 	char *month[12] = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
 	int mDay = t->tm_mon;
 	int dMonth = t->tm_mday;
 	int year = t->tm_year + 1900;	
-	char *am_pm[2] = { "am", "pm" };
 	// Print time in specified format.
-	printf("\n%d:%d%s, %s, %s %d, %d\n", hour, min, am_pm[ap], wkDay[day], month[mDay], dMonth, year);
+	printf("\n%d:%s%d%s, %s, %s %d, %d\n", hour, zero[preMin], min, am_pm[ap], wkDay[day], month[mDay], dMonth, year);
 }
 
 
 // Memory managment catch all.
 void memCleaner(struct room *rooms) {
-	free(rooms);
+	int i;
+	for (i = 0; i < NUM_ROOMS; i++) {
+		free(rooms[i].name);
+	}
 }
 
-// [ ] h ttp://stackoverflow.com/questions/4204666/how-to-list-files-in-a-directory-in-a-c-program
-// [ ] h ttp://stackoverflow.com/questions/1442116/how-to-get-date-and-time-value-in-c-program (accepted answer)
-// [ ] h ttp://en.cppreference.com/w/c/chrono/tm
+
+/* CITATIONS
+[ ] http://www.gnu.org/software/libc/manual/html_node/Creating-Directories.html
+[ ] http://stackoverflow.com/questions/10147990/how-to-create-directory-with-right-permissons-using-c-on-posix
+[ ] http://cboard.cprogramming.com/c-programming/165757-using-process-id-name-file-directory.html
+[ ] http://www.sanfoundry.com/c-program-implement-fisher-yates-algorithm-array-shuffling/
+[ ] https://www.tutorialspoint.com/c_standard_library/c_function_srand.htm
+[ ] https://www.tutorialspoint.com/cprogramming/c_file_io.htm
+[ ] https://www.tutorialspoint.com/c_standard_library/c_function_strncat.htm
+[ ] https://www.tutorialspoint.com/c_standard_library/c_function_strlen.htm
+[ ] http://stackoverflow.com/questions/8107826/proper-way-to-empty-a-c-string
+[ ] http://stackoverflow.com/questions/13204650/how-to-chdir-in-c-program-in-linux-environment
+[ ] http://stackoverflow.com/questions/20265328/readdir-beginning-with-dots-instead-of-files
+[ ] http://stackoverflow.com/questions/4853556/how-to-add-an-element-to-a-string-array-in-c
+[ ]
+[ ]
+[ ]
+[ ]
+[ ]
+[ ]
+[ ] http://stackoverflow.com/questions/4204666/how-to-list-files-in-a-directory-in-a-c-program
+[ ] http://stackoverflow.com/questions/1442116/how-to-get-date-and-time-value-in-c-program (accepted answer)
+[ ] http://en.cppreference.com/w/c/chrono/tm
+*/
