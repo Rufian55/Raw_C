@@ -6,15 +6,17 @@
 * members to a subdirectory, reads this file data back in, rebuilds the node
 * structs and executes gameplay with the read back in data.]]  A time function
 * is also provided. Call time, in place of a room name, and current local time
-* is displayed.  Play continues until END_ROOM is visited.  A list of rooms
-* visited and the number of steps is provided with the congratulatory message.
+* is displayed.  This time process involves building the current time string,
+* writing the string to file, reading the string back in, and displaying it.
+* Play continues until END_ROOM is visited.  A list of rooms visited and the
+* number of steps is provided with the congratulatory message.
 ******************************************************************************/
 #include <dirent.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-//#include <pthread.h>
+#include <pthread.h>
 #include <time.h>
 #include <unistd.h>
 #include <sys/param.h>
@@ -30,6 +32,8 @@
 #define TYPE_BUFFER 11		// Room type enumeration START_ROOM + 1 for '\0'.
 #define MAX_LOOP 250		// Inhibits infinite loop while generating room connections.
 #define MAX_READ 12			// Max chars to read back in function readRoom().
+#define TIME 50			// Buffer size for reading and writing time with tellTime(), et.al.
+#define DIR_NAME 20			// Directory name length limit.
 
 // Three room types enumeration.
 enum room_type {
@@ -53,7 +57,7 @@ struct room {
 // Rooms created name storage array - helper for populating rooms_list.
 char g_selected[NUM_ROOMS][NAME_BUFFER_LEN];
 
-// Color selected char array for colorizing room names. [13]
+// Color selected c-string array for colorizing room names. [13]
 char *color[11] = { "\x1b[38;5;21m", "\x1b[38;5;130m", "\x1b[38;5;6m", "\x1b[38;5;2m",
 				"\x1b[38;5;135m", "\x1b[38;5;201m", "\x1b[38;5;1m", "\x1b[38;5;247m",
 				"\x1b[15m", "\x1b[38;5;3m", "\x1b[m" };
@@ -78,6 +82,8 @@ void theEnd(int, struct room **, int);
 void print_room(int, struct room rooms_list[NUM_ROOMS]);	// Unused - debug utility function.
 void print1Room(struct room *);						// Unused - debug utility function.
 void tellTime();
+void writeTime(char *);
+void readTime(char *);
 int colorSelector(char *);
 void memCleaner(struct room *);
 
@@ -226,7 +232,7 @@ bool ok2connect(int rm1, int rm2, struct room rooms_list[NUM_ROOMS]) {
 // Write the room data to the hard coded directory.
 void writeRooms(struct room rooms_list[NUM_ROOMS]) {
 	// Build directory string.
-	char *dirName = malloc(sizeof(char) * 20);
+	char *dirName = malloc(sizeof(char) * DIR_NAME);
 	char myRooms[] = "kearnsc.rooms.";
 	sprintf(dirName, "%s%d", myRooms, getpid());//					[3]
 	// Create the directory in parent(current) directory.
@@ -269,7 +275,7 @@ void writeRooms(struct room rooms_list[NUM_ROOMS]) {
 // Recreate the rooms structure by reading in the files.
 struct room* readAllRooms(struct room rooms_rbi[NUM_ROOMS]) {
 	// Build directory string.
-	char *dirName = malloc(sizeof(char) * 20);
+	char *dirName = malloc(sizeof(char) * DIR_NAME);
 	char myRooms[] = "kearnsc.rooms.";
 	sprintf(dirName, "%s%d", myRooms, getpid());
 
@@ -320,7 +326,6 @@ struct room readRoom(char *rmName) {
 	// Requires a malloc here else "issues". Free via memCleaner().
 	aRoom.name = malloc(sizeof(char) * MAX_READ);
 	strcpy(aRoom.name, str);
-
 	int read;
 	int conn_num;
 	// Retrieve the room connection's connection number and name.
@@ -380,7 +385,7 @@ struct room *getRoom(char *roomName, struct room rooms_rbi[NUM_ROOMS]) {
 // Main game loop.
 void runGame(struct room *read_room) {
 	// Determine and set start roon index.
-	int i, cur, q;
+	int i, cur, q, ch;
 	// Get read_room index for START_ROOM. 
 	for (i = 0; i < NUM_ROOMS; i++) {
 		if (read_room[i].type == START_ROOM) {
@@ -413,8 +418,15 @@ void runGame(struct room *read_room) {
 		printConns(current_room);
 		printf("WHERE TO? >");
 		fgets(buffer, NAME_BUFFER_LEN, stdin);
-		// Remove newline.
-		buffer[strlen(buffer) - 1] = '\0';
+		// Inhibit stdin/buffer overrun type ahead user behaviour, string spaces, etc.
+		if (!strchr(buffer, '\n')) {
+			// Consume rest of chars up to '\n'.
+			while (((ch = getchar()) != EOF) && (ch != '\n'));//		[14]
+		}
+		else {
+			// Remove newline.
+			buffer[strlen(buffer) - 1] = '\0';
+		}
 
 		// Compare the user's input with all of the connections.
 		for (i = 0; i < current_room->num_conns; i++) {
@@ -534,8 +546,55 @@ void tellTime() {
 	int mDay = t->tm_mon;
 	int dMonth = t->tm_mday;
 	int year = t->tm_year + 1900;	
+	// Build theTime c-string.
+	char *theTime = malloc(sizeof(char) * 50);
+	sprintf(theTime, "%d:%s%d%s, %s, %s %d, %d", hour, zero[preMin], min, am_pm[ap], wkDay[day], month[mDay], dMonth, year);
+	// Write theTime string to file.
+	writeTime(theTime);
+	// Read back in theTime string back in.
+	char *the2timer = malloc(sizeof(char) * TIME);
+	readTime(the2timer);
 	// Print time in specified format.
-	printf("\n%d:%s%d%s, %s, %s %d, %d\n", hour, zero[preMin], min, am_pm[ap], wkDay[day], month[mDay], dMonth, year);
+	printf("\n%s%s%s", color[2], the2timer, color[10]);
+
+	// Below is to just print the time without the file write read operation for debug.
+	// printf("\n%d:%s%d%s, %s, %s %d, %d\n", hour, zero[preMin], min, am_pm[ap], wkDay[day], month[mDay], dMonth, year);
+
+	free(theTime);
+	free(the2timer);
+}
+
+// Writes passed argument "theTime" to dirName/currentTime.txt.
+void writeTime(char *theTime) {
+	// Build directory string.
+	char *dirName = malloc(sizeof(char) * DIR_NAME);
+	char myRooms[] = "kearnsc.rooms.";
+	sprintf(dirName, "%s%d", myRooms, getpid()); // Note getppid() for parent pid.
+	// Change to the child directory.
+	chdir(dirName);
+	FILE *fp = fopen("currentTime.txt", "w");
+	fprintf(fp, "%s\n", theTime);
+	fclose(fp);
+	// Change to parent directory.
+	chdir("..");
+	free(dirName);
+}
+
+
+// Reads dirName/currentTime.txt contents to char *the2timer.
+void readTime(char *the2timer) {
+	// Build directory string.
+	char *dirName = malloc(sizeof(char) * DIR_NAME);
+	char myRooms[] = "kearnsc.rooms.";
+	sprintf(dirName, "%s%d", myRooms, getpid()); // Note getppid() for parent pid.
+	// Change to the child directory.
+	chdir(dirName);
+	FILE *fp = fopen("currentTime.txt", "r");
+	fgets(the2timer, TIME, fp);
+	fclose(fp);
+	// Change to parent directory.
+	chdir("..");
+	free(dirName);
 }
 
 
@@ -600,4 +659,6 @@ void memCleaner(struct room *rooms) {
 [11] http://stackoverflow.com/questions/1442116/how-to-get-date-and-time-value-in-c-program (accepted answer)
 [12] http://en.cppreference.com/w/c/chrono/tm
 [13] http://bitmote.com/index.php?post/2012/11/19/Using-ANSI-Color-Codes-to-Colorize-Your-Bash-Prompt-on-Linux
+[14] https://stackoverflow.com/questions/38767967/clear-input-buffer-after-fgets-in-c (user "pmg" answer)
+[15] https://computing.llnl.gov/tutorials/pthreads/
 */
