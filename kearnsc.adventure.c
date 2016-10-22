@@ -8,20 +8,23 @@
 * is also provided. Call time, in place of a room name, and current local time
 * is displayed.  This time process involves building the current time string,
 * writing the string to file, reading the string back in, and displaying it.
+* Note that tellTime() is executed by a seperate thread with mutex locks
+* installed at first and last line of tellTime. The thread is in runGame(). 
 * Play continues until END_ROOM is visited.  A list of rooms visited and the
-* number of steps is provided with the congratulatory message.
+* number of steps is provided with the congratulatory message. Valgrind
+* memcheck checks good, no leaks or errors reported.
 ******************************************************************************/
-#include <dirent.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <pthread.h>
-#include <time.h>
-#include <unistd.h>
-#include <sys/param.h>
-#include <sys/stat.h>
-#include <sys/types.h>
+#include <dirent.h>			// DIR Directories.
+#include <errno.h>			// Error printing.
+#include <stdbool.h>			// Booleans.
+#include <stdio.h>			// FILE Input/Output.
+#include <stdlib.h>			// Standard library for C.
+#include <string.h>			// String functions.
+#include <pthread.h>			// Threads.
+#include <time.h>				// Time.
+#include <unistd.h>			// getpid().
+#include <sys/stat.h>		// mkdir().
+#include <sys/types.h>		// getpid().
 
 // Constants.
 #define MIN_CONNS 3			// Minimum connections per graph node.
@@ -30,26 +33,22 @@
 #define NUM_ROOM_NAMES 10	// Number of room names to choose from.
 #define NAME_BUFFER_LEN 9	// User input buffer length - magenta + 1 for '\0' + 1 for \n from fgets().
 #define TYPE_BUFFER 11		// Room type enumeration START_ROOM + 1 for '\0'.
-#define MAX_LOOP 250		// Inhibits infinite loop while generating room connections.
+#define MAX_LOOP 250			// Inhibits infinite loop while generating room connections.
 #define MAX_READ 12			// Max chars to read back in function readRoom().
-#define TIME 50			// Buffer size for reading and writing time with tellTime(), et.al.
+#define TIME 50				// Buffer size for reading and writing time with tellTime(), et.al.
 #define DIR_NAME 20			// Directory name length limit.
 
 // Three room types enumeration.
-enum room_type {
-	START_ROOM,
-	END_ROOM,
-	MID_ROOM
-};
+enum room_type { START_ROOM, END_ROOM, MID_ROOM };
 
 // Graph node struct of type room.
 struct room {
-	enum room_type type;						// Each graph node struct has access to room_type enum.
+	enum room_type type;					// Each graph node struct has access to room_type enum.
 	char *name;								// Name of the individual graph node struct.
-	int max_conns;								// Max connections allowed.
-	int num_conns;								// Actual number of connections assigned.
-	struct room *conns[NUM_ROOMS];				// Connections array for each nodes assigned connection names.
-	char rebuildConns[NUM_ROOMS][NAME_BUFFER_LEN];	// Temp holding array of room names used in readRoom();
+	int max_conns;							// Max connections allowed.
+	int num_conns;							// Actual number of connections assigned.
+	struct room *conns[NUM_ROOMS];						// Connections array for each nodes assigned connection names.
+	char rebuildConns[NUM_ROOMS][NAME_BUFFER_LEN];	// Holding array of room names used in readRoom();
 };
 
 /***** GLOBALS *****/
@@ -57,10 +56,13 @@ struct room {
 // Rooms created name storage array - helper for populating rooms_list.
 char g_selected[NUM_ROOMS][NAME_BUFFER_LEN];
 
-// Color selected c-string array for colorizing room names. [13]
-char *color[11] = { "\x1b[38;5;21m", "\x1b[38;5;130m", "\x1b[38;5;6m", "\x1b[38;5;2m",
-				"\x1b[38;5;135m", "\x1b[38;5;201m", "\x1b[38;5;1m", "\x1b[38;5;247m",
-				"\x1b[15m", "\x1b[38;5;3m", "\x1b[m" };
+// Color selected c-string array for colorizing room names, time string, and console default. [13]
+char *color[12] = { "\x1b[38;5;21m", "\x1b[38;5;130m", "\x1b[38;5;6m", "\x1b[38;5;2m",
+				"\x1b[38;5;99m", "\x1b[38;5;201m", "\x1b[38;5;1m", "\x1b[38;5;247m",
+				"\x1b[15m", "\x1b[38;5;3m", "\x1b[m", "\x1b[38;5;69m" };
+
+// Initialize mutex lock. [16]
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 /**** END GLOBALS *****/
 
@@ -80,30 +82,32 @@ void runGame(struct room *room_rbi);
 void printConns(struct room *);
 void theEnd(int, struct room **, int);
 void print_room(int, struct room rooms_list[NUM_ROOMS]);	// Unused - debug utility function.
-void print1Room(struct room *);						// Unused - debug utility function.
-void tellTime();
+void print1Room(struct room *);									// Unused - debug utility function.
+void* tellTime(void *);												// Used by pthread pT_1.
 void writeTime(char *);
-void readTime(char *);
+void readTime();
 int colorSelector(char *);
 void memCleaner(struct room *);
 
 int main() {
-	time_t t;									// Declare a time_t var.
-	srand((unsigned)time(&t));					// Seed the random number generator.	[1]
-	// Room names array.
-	char *room_names[NUM_ROOM_NAMES] = { "Blue", "Brown", "Cyan", "Green", "Indigo",
-		"Magenta", "Red", "Silver", "White", "Yellow" };
-	// Declare rooms_list[7] array of type struct room for the 7 randomly selected rooms. 
-	struct room rooms_list[NUM_ROOMS];
+	time_t t;										// Declare a time_t var.
+	srand((unsigned)time(&t));					// Seed the random number generator. [1]
+	char *room_names[NUM_ROOM_NAMES] = {	// Room names array.
+		"Blue", "Brown", "Cyan", "Green",
+		"Indigo", "Magenta", "Red", "Silver",
+		"White", "Yellow" };
+	struct room rooms_list[NUM_ROOMS];		/* Declare rooms_list[7] array of type struct
+											   			room for the 7 randomly selected rooms. */
 	pickRoomNames(room_names);					// Generate random unique list of rooms.
 	make_rooms(rooms_list);						// Make rooms and connect graph datastructure.
 	writeRooms(rooms_list);						// Write rooms to specified child directory.
-	struct room rooms_rbi[NUM_ROOMS];				// Declare rooms_rbi[7] array for "rbi" rooms. 
+	struct room rooms_rbi[NUM_ROOMS];						// Declare rooms_rbi[7] array for "rbi" rooms. 
 	struct room *read_room = readAllRooms(rooms_rbi);	// Read rooms from specified child directory.
-	runGame(read_room);							// Run the game from the read_room array!
+	runGame(read_room);											// Run the game from the read_room array!
 	memCleaner(read_room);						// Manage memory.
 	return 0;
 }
+
 
 // Returns an int from 3 to 6 inclusive.
 int getRand3_6() {
@@ -111,7 +115,8 @@ int getRand3_6() {
 	return r;
 }
 
-/* Fisher-Yates array shuffle algorithm.							 [2]
+
+/* Fisher-Yates array shuffle algorithm. [2]
    Note internal _rand_int() function. */
 int _rand_int(int n) {
 	int limit = RAND_MAX - RAND_MAX % n;
@@ -159,7 +164,7 @@ void make_rooms(struct room rooms_list[NUM_ROOMS]) {
 		rooms_list[i].max_conns = getRand3_6();		// Targeted # of connections for room "i".
 		rooms_list[i].num_conns = 0;
 		rooms_list[i].type = MID_ROOM;
-		for (j = 0; j < NUM_ROOMS; j++) {			// Set all room connections to NULL.
+		for (j = 0; j < NUM_ROOMS; j++) {				// Set all room connections to NULL.
 			rooms_list[i].conns[j] = NULL;
 		}
 	}
@@ -176,7 +181,7 @@ void make_rooms(struct room rooms_list[NUM_ROOMS]) {
 			// Now create index of a random room to connect to,
 			aRoom = rand() % NUM_ROOMS;
 			// attempt to connect the rooms. If connect() returns false,
-			// create a new random room index and try again upto "quit" times.
+			// create a new random room index and try again upto MAX_LOOP times.
 			while (rooms_list[i].num_conns < rooms_list[i].max_conns && quit < MAX_LOOP) {
 				if (ok2connect(i, aRoom, rooms_list)) {
 					connect(i, aRoom, rooms_list);
@@ -234,18 +239,21 @@ void writeRooms(struct room rooms_list[NUM_ROOMS]) {
 	// Build directory string.
 	char *dirName = malloc(sizeof(char) * DIR_NAME);
 	char myRooms[] = "kearnsc.rooms.";
-	sprintf(dirName, "%s%d", myRooms, getpid());//					[3]
-	// Create the directory in parent(current) directory.
-	mkdir(dirName, 0755);//										[4]
-	// Change to the child directory.								[5]
+	sprintf(dirName, "%s%d", myRooms, getpid());// [3]
+	// Create the directory in parent(current) directory. [4]
+	mkdir(dirName, 0755);
+	// Change to the child directory. [5]
 	chdir(dirName);
 	// For each room make a file.
 	int i,j;
 	for (i = 0; i < NUM_ROOMS; i++) {
 		// Open file.
-		FILE *fp = fopen(rooms_list[i].name, "w");//					[6]
+		FILE *fp = fopen(rooms_list[i].name, "w");// [6]
+		if (fp == NULL) {
+			perror("writeRooms' fopen() call failed: ");
+		}
 		// Write room name.
-		fprintf(fp, "ROOM NAME: %s\n", rooms_list[i].name);//			[7]
+		fprintf(fp, "ROOM NAME: %s\n", rooms_list[i].name);// [7]
 		// Write connections.
 		for (j = 0; j < rooms_list[i].num_conns; j++) {
 			fprintf(fp, "CONNECTION %d: %s\n", j + 1, rooms_list[i].conns[j]->name);
@@ -281,13 +289,13 @@ struct room* readAllRooms(struct room rooms_rbi[NUM_ROOMS]) {
 
 	// Change to child directory.
 	chdir(dirName);
-	// Open dir and read in each room file.							[8]
+	// Open dir and read in each room file.	[8]
 	DIR *dp;
 	struct dirent *dir;
 	dp = opendir(".");
 	int count = 0;
 	if (dp) {
-		// Read the rooms individually fromn the directory.			[9][10]
+		// Read the rooms individually fromn the directory. [9][10]
 		while ((dir = readdir(dp)) != NULL || count < NUM_ROOMS) {
 			if (dir->d_name[0] != '.') {
 				rooms_rbi[count] = readRoom(dir->d_name);
@@ -295,8 +303,11 @@ struct room* readAllRooms(struct room rooms_rbi[NUM_ROOMS]) {
 			}
 		}
 	}
+	else if (ENOENT == errno) { // [17]
+		printf("readAllRooms' opendir() failed: %s directory does not exist!\n", dirName);
+	}
 	else {
-		printf("Failed to open %s Directory!\n", dirName);
+		printf("readAllRooms' opendir() failed to open %s directory!\n", dirName);
 	}
 	// Close child directory.
 	closedir(dp);
@@ -304,11 +315,9 @@ struct room* readAllRooms(struct room rooms_rbi[NUM_ROOMS]) {
 	free(dirName);
 	// Return to child's parent directory.
 	chdir("..");
-
 	/* Now that all rooms are rebuilt, populate connection
 	   pointers via room struct's rebuildConns array. */
 	rebuildConnections(rooms_rbi);
-
 	return rooms_rbi;
 }
 
@@ -319,6 +328,9 @@ struct room readRoom(char *rmName) {
 	struct room aRoom;
 	// Open the file by name parameter.
 	FILE *fp = fopen(rmName, "r");
+	if (fp == NULL) {
+		perror("readRoom's fopen() call failed: ");
+	}
 	// Declare a c-string container for reading. 
 	char *str = malloc(sizeof(char) * MAX_READ);
 	// Retrieve the room name.
@@ -382,7 +394,7 @@ struct room *getRoom(char *roomName, struct room rooms_rbi[NUM_ROOMS]) {
 }
 
 
-// Main game loop.
+// Main game loop. **NOTE - This function contains a thread.**
 void runGame(struct room *read_room) {
 	// Determine and set start roon index.
 	int i, cur, q, ch;
@@ -421,7 +433,7 @@ void runGame(struct room *read_room) {
 		// Inhibit stdin/buffer overrun type ahead user behaviour, string spaces, etc.
 		if (!strchr(buffer, '\n')) {
 			// Consume rest of chars up to '\n'.
-			while (((ch = getchar()) != EOF) && (ch != '\n'));//		[14]
+			while (((ch = getchar()) != EOF) && (ch != '\n'));// [14]
 		}
 		else {
 			// Remove newline.
@@ -446,9 +458,18 @@ void runGame(struct room *read_room) {
 				// Set skip_Huh
 				skip_Huh = false;
 				break;
-			}
+			} // Else, tell the local system time.
 			else if (strncmp(buffer, "time", 4) == 0) {
-				tellTime();
+				// Control changes to thread pT_1.	[16]
+				// Initialize thread pT_1.
+				pthread_t pT_1;
+				/* Run tellTime() inside thread pT_1.
+				   Mutex lock & unlock handled in tellTime(). */
+				pthread_create(&pT_1, NULL, tellTime, NULL);
+				// Join pT_1 thread to main()'s thread.
+				pthread_join(pT_1, NULL);
+				// Processing resumed by main()'s thread.
+				readTime();
 				skip_Huh = false;
 				break;
 			}
@@ -526,42 +547,50 @@ void print1Room(struct room *aRoom) {
 }
 
 
-// Prints the time. Utilizes the time.h library.						[11][12]
-void tellTime() {
+/* Prints the time. Utilizes the time.h library. [11][12]
+   Note mutex lock/unlock [16] and function signature set
+   for threading with void* pointer returned (but not utilized). */
+void* tellTime(void *param) {
+	// Lock process.
+	pthread_mutex_lock(&lock);
 	time_t result = time(NULL);
 	struct tm *t = localtime(&result);
 	// Format time strings and int modifiers...
 	int hour = t->tm_hour;
 	int ap = 0;
-	if (hour > 11) { ap = 1; }				// am or pm.
+	if (hour > 11) { ap = 1; }						// am or pm.
 	char *am_pm[2] = { "am", "pm" };
-	if (hour > 12) { hour -= 12; }			// No 24 hour military time here!
+	if (hour > 12) { hour -= 12; }				// No 24 hour military time here!
 	int min = t->tm_min;
-	char *zero[2] = { "\0", "0" };			// Modifier for preceding 0, like 13:01
-	int preMin = 0;						//   so that we can avoid
-	if (min < 10 && min >= 0) { preMin = 1; }	//   this scenario: 10:1 instead of 10:01.
-	char *wkDay[7] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
+	char *zero[2] = { "\0", "0" };				// Modifier for preceding 0, like 13:01
+	int preMin = 0;									//  so that we can avoid
+	if (min < 10 && min >= 0) { preMin = 1; }	//  this scenario: 10:1 instead of 10:01.
+	char *wkDay[7] = { "Sunday", "Monday",
+		"Tuesday", "Wednesday", "Thursday",
+		"Friday", "Saturday" };
 	int day = t->tm_wday;
-	char *month[12] = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
+	char *month[12] = { "January", "February",
+		"March", "April", "May", "June",
+		"July", "August", "September",
+		"October", "November", "December" };
 	int mDay = t->tm_mon;
 	int dMonth = t->tm_mday;
 	int year = t->tm_year + 1900;	
 	// Build theTime c-string.
 	char *theTime = malloc(sizeof(char) * 50);
-	sprintf(theTime, "%d:%s%d%s, %s, %s %d, %d", hour, zero[preMin], min, am_pm[ap], wkDay[day], month[mDay], dMonth, year);
+	sprintf(theTime, "%d:%s%d%s, %s, %s %d, %d",
+		hour, zero[preMin], min, am_pm[ap],
+		wkDay[day], month[mDay], dMonth, year);
 	// Write theTime string to file.
 	writeTime(theTime);
-	// Read back in theTime string back in.
-	char *the2timer = malloc(sizeof(char) * TIME);
-	readTime(the2timer);
-	// Print time in specified format.
-	printf("\n%s%s%s", color[2], the2timer, color[10]);
 
-	// Below is to just print the time without the file write read operation for debug.
+	// Below is to just print the time without the file write/read operation for debug.
 	// printf("\n%d:%s%d%s, %s, %s %d, %d\n", hour, zero[preMin], min, am_pm[ap], wkDay[day], month[mDay], dMonth, year);
 
 	free(theTime);
-	free(the2timer);
+	// Unlock process.
+	pthread_mutex_unlock(&lock);
+	return 0;
 }
 
 // Writes passed argument "theTime" to dirName/currentTime.txt.
@@ -569,10 +598,13 @@ void writeTime(char *theTime) {
 	// Build directory string.
 	char *dirName = malloc(sizeof(char) * DIR_NAME);
 	char myRooms[] = "kearnsc.rooms.";
-	sprintf(dirName, "%s%d", myRooms, getpid()); // Note getppid() for parent pid.
+	sprintf(dirName, "%s%d", myRooms, getpid());
 	// Change to the child directory.
 	chdir(dirName);
 	FILE *fp = fopen("currentTime.txt", "w");
+	if (fp == NULL) {
+		perror("writeTime() fopen() Failed: ");
+	}
 	fprintf(fp, "%s\n", theTime);
 	fclose(fp);
 	// Change to parent directory.
@@ -582,25 +614,35 @@ void writeTime(char *theTime) {
 
 
 // Reads dirName/currentTime.txt contents to char *the2timer.
-void readTime(char *the2timer) {
+void readTime() {
+	// Read back in theTime string back in.
+	char *the2timer = malloc(sizeof(char) * TIME);
 	// Build directory string.
 	char *dirName = malloc(sizeof(char) * DIR_NAME);
 	char myRooms[] = "kearnsc.rooms.";
-	sprintf(dirName, "%s%d", myRooms, getpid()); // Note getppid() for parent pid.
+	sprintf(dirName, "%s%d", myRooms, getpid());
 	// Change to the child directory.
 	chdir(dirName);
 	FILE *fp = fopen("currentTime.txt", "r");
+	if (fp == NULL) {
+		perror("readTime fopen() call failed: ");
+	}
 	fgets(the2timer, TIME, fp);
 	fclose(fp);
 	// Change to parent directory.
 	chdir("..");
+	// Print time in specified format.
+	printf("\n%s%s%s", color[11], the2timer, color[10]);
+
 	free(dirName);
+	free(the2timer);
 }
 
 
-/* Returns corresponding int based upon input c-string. */
+/* Returns corresponding int based upon input c-string.
+	Console default is color[10]. */
 int colorSelector(char *color) {
-	int result = 10;// Console default.
+	int result = 10;
 
 	if (strcmp(color, "Blue") == 0) {
 		result = 0;
@@ -661,4 +703,7 @@ void memCleaner(struct room *rooms) {
 [13] http://bitmote.com/index.php?post/2012/11/19/Using-ANSI-Color-Codes-to-Colorize-Your-Bash-Prompt-on-Linux
 [14] https://stackoverflow.com/questions/38767967/clear-input-buffer-after-fgets-in-c (user "pmg" answer)
 [15] https://computing.llnl.gov/tutorials/pthreads/
+[16] http://stackoverflow.com/questions/14888027/mutex-lock-threads (accepted answer)
+[17] http://stackoverflow.com/questions/12510874/how-can-i-check-if-a-directory-exists-on-linux-in-c (accepted answer)
+[**] Generally, lecture materials by Prof. B. Brewster, CS344-400-F16, Oregon State University.
 */
