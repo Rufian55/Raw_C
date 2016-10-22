@@ -1,0 +1,6 @@
+#!/bin/bash
+
+if [[ -e kearnsc.adventure.c ]]; then
+	cp kearnsc.adventure.c ../unixstuff/backups
+fi
+exit 0

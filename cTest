@@ -1,0 +1,13 @@
+#!/bin/bash
+
+COLORS=(Blue Brown Cyan Green Gold Magenta Red Silver White Yellow)
+
+for i in "${COLORS[@]}"
+do
+	if [ -e $i ]; then
+		cat $i
+	fi
+	echo -e "\n"
+done
+
+exit 0

@@ -9,19 +9,19 @@
 * is displayed.  This time process involves building the current time string,
 * writing the string to file, reading the string back in, and displaying it.
 * Note that tellTime() is executed by a seperate thread with mutex locks
-* installed at first and last line of tellTime. The thread is in runGame(). 
+* installed at first and last line of tellTime(). The thread is in runGame(). 
 * Play continues until END_ROOM is visited.  A list of rooms visited and the
 * number of steps is provided with the congratulatory message. Valgrind
 * memcheck checks good, no leaks or errors reported.
 ******************************************************************************/
 #include <dirent.h>			// DIR Directories.
 #include <errno.h>			// Error printing.
-#include <stdbool.h>			// Booleans.
+#include <stdbool.h>		// Booleans.
 #include <stdio.h>			// FILE Input/Output.
 #include <stdlib.h>			// Standard library for C.
 #include <string.h>			// String functions.
-#include <pthread.h>			// Threads.
-#include <time.h>				// Time.
+#include <pthread.h>		// Threads.
+#include <time.h>			// Time.
 #include <unistd.h>			// getpid().
 #include <sys/stat.h>		// mkdir().
 #include <sys/types.h>		// getpid().
@@ -33,9 +33,9 @@
 #define NUM_ROOM_NAMES 10	// Number of room names to choose from.
 #define NAME_BUFFER_LEN 9	// User input buffer length - magenta + 1 for '\0' + 1 for \n from fgets().
 #define TYPE_BUFFER 11		// Room type enumeration START_ROOM + 1 for '\0'.
-#define MAX_LOOP 250			// Inhibits infinite loop while generating room connections.
+#define MAX_LOOP 250		// Inhibits infinite loop while generating room connections.
 #define MAX_READ 12			// Max chars to read back in function readRoom().
-#define TIME 50				// Buffer size for reading and writing time with tellTime(), et.al.
+#define TIME 50			// Buffer size for reading and writing time with tellTime(), et.al.
 #define DIR_NAME 20			// Directory name length limit.
 
 // Three room types enumeration.
@@ -43,11 +43,11 @@ enum room_type { START_ROOM, END_ROOM, MID_ROOM };
 
 // Graph node struct of type room.
 struct room {
-	enum room_type type;					// Each graph node struct has access to room_type enum.
+	enum room_type type;						// Each graph node struct has access to room_type enum.
 	char *name;								// Name of the individual graph node struct.
-	int max_conns;							// Max connections allowed.
-	int num_conns;							// Actual number of connections assigned.
-	struct room *conns[NUM_ROOMS];						// Connections array for each nodes assigned connection names.
+	int max_conns;								// Max connections allowed.
+	int num_conns;								// Actual number of connections assigned.
+	struct room *conns[NUM_ROOMS];				// Connections array for each nodes assigned connection names.
 	char rebuildConns[NUM_ROOMS][NAME_BUFFER_LEN];	// Holding array of room names used in readRoom();
 };
 
@@ -82,28 +82,28 @@ void runGame(struct room *room_rbi);
 void printConns(struct room *);
 void theEnd(int, struct room **, int);
 void print_room(int, struct room rooms_list[NUM_ROOMS]);	// Unused - debug utility function.
-void print1Room(struct room *);									// Unused - debug utility function.
-void* tellTime(void *);												// Used by pthread pT_1.
+void print1Room(struct room *);						// Unused - debug utility function.
+void* tellTime(void *);								// Used by pthread pT_1.
 void writeTime(char *);
 void readTime();
 int colorSelector(char *);
 void memCleaner(struct room *);
 
 int main() {
-	time_t t;										// Declare a time_t var.
+	time_t t;									// Declare a time_t var.
 	srand((unsigned)time(&t));					// Seed the random number generator. [1]
-	char *room_names[NUM_ROOM_NAMES] = {	// Room names array.
+	char *room_names[NUM_ROOM_NAMES] = {			// Room names array.
 		"Blue", "Brown", "Cyan", "Green",
 		"Indigo", "Magenta", "Red", "Silver",
 		"White", "Yellow" };
-	struct room rooms_list[NUM_ROOMS];		/* Declare rooms_list[7] array of type struct
-											   			room for the 7 randomly selected rooms. */
+	struct room rooms_list[NUM_ROOMS];				/* Declare rooms_list[7] array of type struct
+											   room for the 7 randomly selected rooms. */
 	pickRoomNames(room_names);					// Generate random unique list of rooms.
 	make_rooms(rooms_list);						// Make rooms and connect graph datastructure.
 	writeRooms(rooms_list);						// Write rooms to specified child directory.
-	struct room rooms_rbi[NUM_ROOMS];						// Declare rooms_rbi[7] array for "rbi" rooms. 
+	struct room rooms_rbi[NUM_ROOMS];				// Declare rooms_rbi[7] array for "rbi" rooms. 
 	struct room *read_room = readAllRooms(rooms_rbi);	// Read rooms from specified child directory.
-	runGame(read_room);											// Run the game from the read_room array!
+	runGame(read_room);							// Run the game from the read_room array!
 	memCleaner(read_room);						// Manage memory.
 	return 0;
 }
@@ -164,7 +164,7 @@ void make_rooms(struct room rooms_list[NUM_ROOMS]) {
 		rooms_list[i].max_conns = getRand3_6();		// Targeted # of connections for room "i".
 		rooms_list[i].num_conns = 0;
 		rooms_list[i].type = MID_ROOM;
-		for (j = 0; j < NUM_ROOMS; j++) {				// Set all room connections to NULL.
+		for (j = 0; j < NUM_ROOMS; j++) {			// Set all room connections to NULL.
 			rooms_list[i].conns[j] = NULL;
 		}
 	}
@@ -558,13 +558,13 @@ void* tellTime(void *param) {
 	// Format time strings and int modifiers...
 	int hour = t->tm_hour;
 	int ap = 0;
-	if (hour > 11) { ap = 1; }						// am or pm.
+	if (hour > 11) { ap = 1; }					// am or pm.
 	char *am_pm[2] = { "am", "pm" };
 	if (hour > 12) { hour -= 12; }				// No 24 hour military time here!
 	int min = t->tm_min;
 	char *zero[2] = { "\0", "0" };				// Modifier for preceding 0, like 13:01
-	int preMin = 0;									//  so that we can avoid
-	if (min < 10 && min >= 0) { preMin = 1; }	//  this scenario: 10:1 instead of 10:01.
+	int preMin = 0;							//  so that we can avoid
+	if (min < 10 && min >= 0) { preMin = 1; }		//  this scenario: 10:1 instead of 10:01.
 	char *wkDay[7] = { "Sunday", "Monday",
 		"Tuesday", "Wednesday", "Thursday",
 		"Friday", "Saturday" };
@@ -640,7 +640,7 @@ void readTime() {
 
 
 /* Returns corresponding int based upon input c-string.
-	Console default is color[10]. */
+   Console default is color[10]. */
 int colorSelector(char *color) {
 	int result = 10;
 
