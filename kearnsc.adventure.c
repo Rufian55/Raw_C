@@ -605,7 +605,7 @@ void writeTime(char *theTime) {
 	if (fp == NULL) {
 		perror("writeTime() fopen() Failed: ");
 	}
-	fprintf(fp, "%s\n", theTime);
+	fprintf(fp, "%s", theTime);
 	fclose(fp);
 	// Change to parent directory.
 	chdir("..");
@@ -632,7 +632,7 @@ void readTime() {
 	// Change to parent directory.
 	chdir("..");
 	// Print time in specified format.
-	printf("\n%s%s%s", color[11], the2timer, color[10]);
+	printf("\n%s%s%s\n", color[11], the2timer, color[10]);
 
 	free(dirName);
 	free(the2timer);
