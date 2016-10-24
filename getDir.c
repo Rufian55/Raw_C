@@ -1,7 +1,9 @@
 /*******************************************************************
 * getDir.c returns a directory based upon userID and <pid> for 
 * general usage wherever needed...
-* Compile with "gcc getDir.c -o getDir -g -Wall"
+* Compile with "gcc getDir.c -o getDir -g -Wall".
+* Note: if executed with valgrind call, will produce a memleak.
+* See link at end of file or SO question on the topic.
 *******************************************************************/
 #include <assert.h>
 #include <pwd.h>
@@ -11,23 +13,15 @@
 #include <unistd.h>
 #include <sys/types.h>
 
-// Prototype.
-char* getDirName();
 
 int main() {
-	printf("Directory name is: %s\n", getDirName() );
-	return 0;
-}
-
-// Returns a directory name based upon userID and processID <pid>
-char* getDirName() {
 	// Get the current process id.
 	pid_t pid = getpid();
 
 	// Get "real" userId. and their entry in /etc/passwd.
 	uid_t uid = getuid();
 
-	// Get user entry in /etc/passwd. (int to c-string)
+	// Get user entry in /etc/passwd.
 	struct passwd *user = getpwuid(uid);
 
 	/* Define the maximum length for the directory name.
@@ -35,11 +29,17 @@ char* getDirName() {
 	unsigned int bufferMaxLen = strlen(".dir.") + strlen(user->pw_name) + 10;
 
 	// Allocate space for the directory name.
-	char* dirName = malloc(bufferMaxLen * sizeof(char));
+	char* dirName = malloc(bufferMaxLen);// *sizeof(char));
 	assert(dirName != NULL);
 
 	// Build dirName string.
 	sprintf(dirName, "%s.dir.%d", user->pw_name, pid);
 
-	return dirName;
+	printf("bufferMaxLen is: %d\n", bufferMaxLen);
+
+	printf("Directory name is: %s\n", dirName);
+
+	free(dirName);
+	return 0;
 }
+// http://stackoverflow.com/questions/40226297/struct-passwd-is-source-of-memory-leak-how-to-properly-free#40226418
