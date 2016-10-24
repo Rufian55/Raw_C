@@ -29,7 +29,7 @@ int main() {
 	unsigned int bufferMaxLen = strlen(".dir.") + strlen(user->pw_name) + 10;
 
 	// Allocate space for the directory name.
-	char* dirName = malloc(bufferMaxLen);// *sizeof(char));
+	char* dirName = malloc(bufferMaxLen *sizeof(char));
 	assert(dirName != NULL);
 
 	// Build dirName string.
