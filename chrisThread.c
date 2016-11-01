@@ -1,7 +1,6 @@
 /******************************************************************************
 * FILE: chrisThread.c	Date: 21 Oct 2016
 * Pthreads and Mutex demo program.
-* Pro. B. Brewster, Oregon State University
 ******************************************************************************/
 #include <pthread.h>
 #include <stdio.h>
