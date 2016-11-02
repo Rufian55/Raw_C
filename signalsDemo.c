@@ -1,5 +1,5 @@
 /****************************************************************************************
-* signalsDemo.c demonstrates use of signals with inter process communications.
+* signalsDemo.c demonstrates use of signals with inter process communications piping.
 * Compile with "gcc signalsDemo.c -o signal -g -Wall".
 *****************************************************************************************/
 #include <stdio.h>
@@ -24,7 +24,7 @@ int main(int argc, char **argv) {
 			close(pipeFDs[0]);		// Close input file descriptor.
 			write(pipeFDs[1], "Hello Parent, this is the Child!", 33);
 			exit(0);
-		default:					// Parent.
+		default:				// Parent.
 			close(pipeFDs[1]);		// Close output file descriptor.
 			r = read(pipeFDs[0], message, sizeof(message));
 			if (r > 0) {
