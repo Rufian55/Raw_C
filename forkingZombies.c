@@ -2,7 +2,7 @@
 * forkingZombies.c demonstrates a zombie process creation and cleanup.
 * Compile with "gcc forkingZombies.c -o zombie -g -Wall".
 * To see the zombie process, open a second terminal and enter
-* \" ps -elf | grep username \" look for the STAT "Z" entry. 
+* \" ps -elf | grep username \" look for the "Z" entry. 
 *****************************************************************************************/
 #include <stdio.h>
 #include <stdlib.h>
