@@ -20,7 +20,7 @@ int main() {
 		perror("The fork() call has failed!\n");
 		exit(1);
 		break;
-	case 0:	// Child process task completes.
+	case 0:		// Child process task completes.
 		printf("CHILD: Terminating!\n");
 		break;
 	default:	// Parent process.
@@ -34,4 +34,5 @@ int main() {
 	}
 	printf("This will be executed by both of us!\n");
 	exit(0);
-	return 0;}
+	return 0;
+}
