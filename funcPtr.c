@@ -10,12 +10,12 @@ int addOne(int inputArg);
 int main() {
 
 	int(*fpArg)(int) = addOne;
-/*     ^     ^    ^        ^
-	  |	   |    |		  |
-	  |	   |    |        Sets @ of Addone() to fpArg.
-	  |     |    Argument - same as addOne().
-	  |     Declared function pointer fpArg.
-	  Return. */
+/*       ^     ^    ^        ^
+	 |     |    |	     |
+	 |     |    |        Sets @ of Addone() to fpArg.
+	 |     |    Argument - same as addOne().
+	 |     Declared function pointer fpArg.
+	 Return. */
 
 	printf("10 + 1 = %d\n", fpArg(10));
 	// Use ptr to addOne()	  ^
@@ -23,7 +23,7 @@ int main() {
 	return 0;
 }
 
-// The AddOne function.
+// The addOne function.
 int addOne(int input) {
 	return input + 1;
 }
