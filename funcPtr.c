@@ -12,7 +12,7 @@ int main() {
 	int(*fpArg)(int) = addOne;
 /*       ^     ^    ^        ^
 	 |     |    |	     |
-	 |     |    |        Sets @ of Addone() to fpArg.
+	 |     |    |        Sets @ of addOne() to fpArg.
 	 |     |    Argument - same as addOne().
 	 |     Declared function pointer fpArg.
 	 Return. */
