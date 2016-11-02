@@ -1,5 +1,5 @@
 /****************************************************************************************
-* funcPtr.c demonstrates how function pointers are declared nd used.
+* funcPtr.c demonstrates how function pointers are declared and used.
 * Compile with "gcc funcPtr.c -o funky -g -Wall".
 *****************************************************************************************/
 #include <stdio.h>
