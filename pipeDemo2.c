@@ -26,17 +26,17 @@ int  main() {
 
 	switch (spawnpid) {
 	case 0: // Child.
-		close(pipeFDs[0]);							// Close the input file descriptor.
+		close(pipeFDs[0]);				// Close the input file descriptor.
 		write(pipeFDs[1], "CHILD: Hi parent!@@", 19);	// Write the entire string into the pipe.
-		exit(0);									// Terminate Child.
+		exit(0);					// Terminate Child.
 		break;
 	default: // Parent.
-		close(pipeFDs[1]);										// Close output file descriptor.
-		memset(completeMessage, '\0', sizeof(completeMessage));		// Clear the buffer.
+		close(pipeFDs[1]);							// Close output file descriptor.
+		memset(completeMessage, '\0', sizeof(completeMessage));			// Clear the buffer.
 		while (strstr(completeMessage, "@@") == NULL) {				// As long as we haven't found the terminal...
 			memset(readBuffer, '\0', sizeof(readBuffer));			// Clear the buffer.
 			r = read(pipeFDs[0], readBuffer, sizeof(readBuffer) - 1);	// Get the next chunk.
-			strcat(completeMessage, readBuffer);					// Add that chunk to what we have so far.
+			strcat(completeMessage, readBuffer);				// Add that chunk to what we have so far.
 			printf("PARENT: Message received from child: \"%s\", total: \"%s\"\n", readBuffer, completeMessage);
 			if (r == -1) {
 				printf("r == -1\n");
@@ -62,9 +62,9 @@ int  main() {
 
 		// Note that the actual pointer arithmetic here does not need a cast to long int...
 		int terminalLocation = strstr(completeMessage, "@@") - completeMessage; // Where is the terminal?
-		completeMessage[terminalLocation] = '\0';						  // End the string early to wipe out the terminal.
+		completeMessage[terminalLocation] = '\0';				// End the string early to wipe out the terminal.
 		printf("PARENT: Complete string: \"%s\"\n", completeMessage);
 		break;
 	}
 	return 0;
-}
+}
