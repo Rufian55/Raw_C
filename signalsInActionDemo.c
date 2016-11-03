@@ -59,13 +59,14 @@ int main() {
 	sigfillset(&SIGUSR2_action.sa_mask);
 	SIGUSR2_action.sa_flags = 0;
 
-	ignore_action.sa_handler = SIG_IGN;
-
 	/* Register SIGINT & SIGUSR2 signals to their respective structs for potential handling. */
 	sigaction(SIGINT, &SIGINT_action, NULL);
 	sigaction(SIGUSR2, &SIGUSR2_action, NULL);
 
+
 	// Register SIGTERM, SIGHUP, & SIGQUIT to be ignored. See [2] above.
+	ignore_action.sa_handler = SIG_IGN;
+
 	sigaction(SIGTERM, &ignore_action, NULL);
 	sigaction(SIGHUP, &ignore_action, NULL);
 	sigaction(SIGQUIT, &ignore_action, NULL);
