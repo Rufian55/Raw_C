@@ -74,7 +74,7 @@ int main() {
 
 	printf("Send a SIGUSR2 signal to kill this program with \"kill(pid, SIGUSR2)\".\n");
 	printf("Here is the pid you'll need: %d\n", getpid());
-	printf("Send a SIGINT signal <Ctrl-c> to sleep 5 seconds, (SIGINT handler function's last line is \"exit(0)\".\n");
+	printf("Send a SIGINT signal <Ctrl-c> to sleep 5 seconds, (SIGINT handler function's last line is \"exit(0)\").\n");
 
 	while (true) {// Infinite loop.
 		pause(); // Sleep, but wake up on signal receipt.
