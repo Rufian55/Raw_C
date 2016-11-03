@@ -20,7 +20,7 @@ int main() {
 		perror("The fork() call has failed!\n");
 		exit(1);
 		break;
-	case 0:		// Child process task completes.
+	case 0:	// Child process task completes.
 		printf("CHILD: Terminating!\n");
 		break;
 	default:	// Parent process.
@@ -28,11 +28,10 @@ int main() {
 		printf("PARENT: Type \"ps -elf | grep \'username\'\" to see the defunct child\n");
 		printf("PARENT: Sleeping...\n");
 		fflush(stdout);
-		sleep(10);	// 10 second delay before waitpid() receives signal that Child has finished.
+		sleep(10);	// 10 second delay before waitpid() recieves signal that Child has finished.
 		waitpid(spawnPid, &childExitStatus, 0);
 		break;
 	}
 	printf("This will be executed by both of us!\n");
 	exit(0);
-	return 0;
-}
+	return 0;}

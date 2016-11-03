@@ -36,8 +36,8 @@
 #include <signal.h>
 
 // Prototypes.
-void catchSIGINT();
-void catchSIGUSR2();
+void catchSIGINT(int);
+void catchSIGUSR2(int);
 
 int main() {
 	//Declare 3 sigaction structs.
@@ -87,7 +87,7 @@ int main() {
 /* Handler function for catching SIGINT signal.
    Writes message, raises SIGUSR2 signal, and sleeps(5)
    when called. */
-void catchSIGINT() {
+void catchSIGINT(int signo) {
 	char* message = "\nCaught SIGINT, raising SIGUSR2 signal, sleeping for 5 seconds...\n";
 	// For write() syscall - STDIN_FILENO = 0, STDOUT_FILENO = 1, STDERR_FILENO = 2
 	write(STDOUT_FILENO, message, 66);		// Can't use printf or strlen(message) as both are non-rentrant.
@@ -98,7 +98,7 @@ void catchSIGINT() {
 
 /* Handler function for catching SIGUSR2 signal.
 Writes message and exits when called. */
-void catchSIGUSR2() {
+void catchSIGUSR2(int signo) {
 	char* message = "Caught SIGUSR2, exiting!\n";
 	write(STDOUT_FILENO, message, 25);
 	exit(0);
