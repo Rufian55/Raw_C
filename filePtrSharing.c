@@ -33,11 +33,11 @@ int main() {
 	forkPID = fork();// Child will have access to fileDescriptor.
 
 	switch (forkPID) {
-	case -1: 
+	case -1: // Error.
 		perror("Error on fork() call: ");
 		exit(1);
 		break;
-	case 0:
+	case 0: // Child.
 		printf("CHILD: Writing C to file.\n");
 		fflush(stdout);
 		write(fileDescriptor, "C", 1);
@@ -53,7 +53,7 @@ int main() {
 		printf("CHILD: After read, new FP position: %d, char read was: %c\n", lseek(fileDescriptor, 0, SEEK_CUR), readBuffer[0]);
 		fflush(stdout);
 		break;
-	default:
+	default: // Parent.
 		printf("PARENT: Writing P to file.\n");
 		fflush(stdout);
 		write(fileDescriptor, "P", 1);
