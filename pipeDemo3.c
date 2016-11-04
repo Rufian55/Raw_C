@@ -22,7 +22,7 @@ int  main() {
 
 	switch (spawnpid) {
 	case 0: // Child.
-		fd = open(FIFOfilename, O_WRONLY);			// Open the FIFO for writing.
+		fd = open(FIFOfilename, O_WRONLY);			// Open the FIFO for writing. FIFO blocked.
 		if (fd == -1) {
 			perror("CHILD: Call to open() failed: ");
 			exit(1);
