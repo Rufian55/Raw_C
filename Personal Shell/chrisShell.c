@@ -18,27 +18,62 @@ void populateArguments(struct input *);
 void memManager(struct input *);
 
 int main() {
-	int ch;
+	int i, ch, exVal = 0;
 	struct input cLine;
-	printf(": ");
-	fflush(stdout);
-	fgets(cLine.inString, NAME_BUFFER_LEN, stdin);
+	while (1) {
+		write(STDOUT_FILENO, ": ", 2);
+		fflush(stdout);
+		fgets(cLine.inString, NAME_BUFFER_LEN, stdin);
 
-	// Inhibit stdin/buffer overrun type ahead user behaviour.
-	if (!strchr(cLine.inString, '\n')) {
-		// Consume rest of chars up to '\n'.
-		while (((ch = getchar()) != EOF) && (ch != '\n'));// [14]
+		// Inhibit stdin/buffer overrun / type ahead user behaviour.
+		if (!strchr(cLine.inString, '\n')) {
+			// Consume rest of chars up to '\n'.
+			while (((ch = getchar()) != EOF) && (ch != '\n'));// [14]
+		}
+		else {
+			// Remove newline.
+			cLine.inString[strlen(cLine.inString) - 1] = '\0';
+		}
+
+		// Constructor for populating cLine members from smallsh command line input.
+		populateArguments(&cLine);
+
+		// print arg list for debugging
+//		for (i = 0; i < cLine.argCount; i++) {
+//			printf("arg[%d] = %s\n", i, cLine.arguments[i]);
+//		}
+
+		// Iterate cLine.arguments[] array for BUILT IN commands then OS commands.
+		for (i = 0; i < cLine.argCount; i++) {
+			if (strcmp(cLine.arguments[i], "exit") == 0) {
+				memManager(&cLine);
+				exit(0);
+			}
+			// BUILT IN 'cd' => [Change Dir].
+			else if (strcmp(cLine.arguments[i], "cd") == 0) {
+				// Check for and handle a cd argument.
+				if (cLine.argCount - 1 > i) {// An argument exists after cd.
+					exVal = chdir(cLine.arguments[i+1]);
+				}
+				else {// cd to HOME environment directory.
+					exVal = chdir(getenv("HOME"));
+				}
+				if (exVal == -1) {
+					perror("Call to cd failed: ");
+				}
+			}
+			/* BUILT IN 'status' => [returns exit status or terminating
+			   signal of last foreground process]. */
+			else if (strcmp(cLine.arguments[i], "status") == 0) {
+				printf("exit value %d\n", exVal);
+			}
+			else { // Operating SYSTEM COMMAND!
+				printf("%s received\n", cLine.arguments[i]);
+			}
+		}
+
+		memManager(&cLine);
 	}
-	else {
-		// Remove newline.
-		cLine.inString[strlen(cLine.inString) - 1] = '\0';
-	}
-
-	// Constructor for populating cLine members from smallsh command line input.
-	populateArguments(&cLine);
-
-	memManager(&cLine);
-
 	return 0;
 }
 
