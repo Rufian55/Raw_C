@@ -18,26 +18,26 @@ int  main() {
 	pid_t spawnpid;
 	char* FIFOfilename = "myNewFifo";
 	newfifo = mkfifo(FIFOfilename, 0644);				// Declare the persistant pipe (FIFO).
-	spawnpid = fork();								// Fork the child, which will write into the pipe.
+	spawnpid = fork();						// Fork the child, which will write into the pipe.
 
 	switch (spawnpid) {
 	case 0: // Child.
-		fd = open(FIFOfilename, O_WRONLY);				// Open the FIFO for writing.
+		fd = open(FIFOfilename, O_WRONLY);			// Open the FIFO for writing.
 		if (fd == -1) {
 			perror("CHILD: Call to open() failed: ");
 			exit(1);
 			break;
 		}
 		write(fd, stringToWrite, strlen(stringToWrite));	// Write the entire string to the pipe.
-		exit(0);									// Terminate Child.
+		exit(0);						// Terminate Child.
 		break;
 	default: // Parent.
-		fd = open(FIFOfilename, O_RDONLY);							// Open the FIFO for reading.
+		fd = open(FIFOfilename, O_RDONLY);				// Open the FIFO for reading.
 		memset(completeMessage, '\0', sizeof(completeMessage));		// Clear the buffer.
-		while (strstr(completeMessage, "@@") == NULL) {				// As long as we haven't found the terminal...
-			memset(readBuffer, '\0', sizeof(readBuffer));			// Also clear this buffer.
-			r = read(fd, readBuffer, sizeof(readBuffer) - 1);			// Get the next chunk.
-			strcat(completeMessage, readBuffer);					// Add that chunk to what we have so far.
+		while (strstr(completeMessage, "@@") == NULL) {			// As long as we haven't found the terminal...
+			memset(readBuffer, '\0', sizeof(readBuffer));		// Also clear this buffer.
+			r = read(fd, readBuffer, sizeof(readBuffer) - 1);	// Get the next chunk.
+			strcat(completeMessage, readBuffer);			// Add that chunk to what we have so far.
 			printf("PARENT: Message received from child: \"%s\", total: \"%s\"\n", readBuffer, completeMessage);
 			// Error checks.
 			if (r == -1) {										
@@ -63,9 +63,9 @@ int  main() {
 
 		// Note that the actual pointer arithmetic here does not need a cast to long int...
 		int terminalLocation = strstr(completeMessage, "@@") - completeMessage; // Where is the terminal?
-		completeMessage[terminalLocation] = '\0';						  // End the string early to wipe out the terminal.
+		completeMessage[terminalLocation] = '\0';			 	// End the string early to wipe out the terminal.
 		printf("PARENT: Complete string: \"%s\"\n", completeMessage);
-		remove(FIFOfilename);										  // Delete the FIFO.
+		remove(FIFOfilename);							// Delete the FIFO.
 		break;
 	}
 	return 0;
