@@ -38,6 +38,6 @@ int main(int argc, char **argv) {
 
 void usage() {
 	printf("\nUsage is: cLine [arg1 arg2 ...arg512][< input_file]"
-		  "[> output_file]\nNote: max args: 512, max chars: 2,048.\n");
+	       "[> output_file]\nNote: max args: 512, max chars: 2,048.\n");
 	exit(EXIT_FAILURE);
 }
