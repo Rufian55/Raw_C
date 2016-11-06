@@ -21,14 +21,14 @@ int main() {
 	int i, ch, exVal = 0;
 	struct input cLine;
 	while (1) {
-		write(STDOUT_FILENO, ": ", 2);
+		write(STDOUT_FILENO, ": ", 2);// Just for fun...
 		fflush(stdout);
 		fgets(cLine.inString, NAME_BUFFER_LEN, stdin);
 
 		// Inhibit stdin/buffer overrun / type ahead user behaviour.
 		if (!strchr(cLine.inString, '\n')) {
 			// Consume rest of chars up to '\n'.
-			while (((ch = getchar()) != EOF) && (ch != '\n'));// [14]
+			while (((ch = getchar()) != EOF) && (ch != '\n'));
 		}
 		else {
 			// Remove newline.
@@ -43,7 +43,7 @@ int main() {
 //			printf("arg[%d] = %s\n", i, cLine.arguments[i]);
 //		}
 
-		// Iterate cLine.arguments[] array for BUILT IN commands then OS commands.
+		// Iterate and process cLine.arguments[] array for BUILT IN commands, then OS commands.
 		for (i = 0; i < cLine.argCount; i++) {
 			if (strcmp(cLine.arguments[i], "exit") == 0) {
 				memManager(&cLine);
@@ -60,15 +60,33 @@ int main() {
 				}
 				if (exVal == -1) {
 					perror("Call to cd failed: ");
+					fflush(stdout);
 				}
 			}
 			/* BUILT IN 'status' => [returns exit status or terminating
 			   signal of last foreground process]. */
 			else if (strcmp(cLine.arguments[i], "status") == 0) {
 				printf("exit value %d\n", exVal);
+				fflush(stdout);
 			}
 			else { // Operating SYSTEM COMMAND!
 				printf("%s received\n", cLine.arguments[i]);
+				fflush(stdout);
+				pid_t spawnpid = -55;
+				spawnpid = fork();
+				printf("spawnpid = %d\n", spawnpid);
+				// spawnpid = -1 (an error), 0 = successful child process created.
+				switch (spawnpid) {
+				case -1:
+					perror("Call to fork() returned -1, signifying an error occurred!\n");
+					exVal = -1;
+					break;
+				case 0:
+					printf("Child process pid = %d\n", getpid());
+					break;
+				default:
+					break;
+				}
 			}
 		}
 
@@ -89,7 +107,7 @@ void usage() {
 
 
 /*********************************************************************************************
-*						Functions populateArguments()
+*						Functions populateArguments()							 [1]
 * The constuctor used to populate struct input cLine with the command line argument
 * string, breaking it apart for appropriate processing.
 * Param:	 struct input *cLine (passed by reference).
@@ -100,25 +118,29 @@ void populateArguments(struct input *cLine) {
 	cLine->argCount = 0;
 	char *token = strtok(cLine->inString, " ");
 	int spaces = 0;
-
+	
 	// Split string and append tokens to cLine->arguments[].
 	while (token) {
-		// Grow arguments array as the number of arguments increases.
-		cLine->arguments = realloc(cLine->arguments, sizeof(char*) * ++spaces);
-		if (cLine->arguments == NULL) {
-			perror("Call to realloc() failed: ");
-			exit(1);
+		// Ignore # and /* comments, as applicable, to each line of input.
+		if ( token[0] != '#' && strncmp(token, "/*", 2) != 0 ) {
+			// Grow arguments array as the number of arguments increases.
+			cLine->arguments = realloc(cLine->arguments, sizeof(char*) * ++spaces);
+			if (cLine->arguments == NULL) {
+				perror("Call to realloc() failed: ");
+				exit(1);
+			}
+			// Note arguments is a 2D array, so malloc for each argument assigned by token.
+			cLine->arguments[spaces - 1] = malloc(sizeof(char*) * strlen(token));
+			if (cLine->arguments[spaces - 1] == NULL) {
+				perror("Call to malloc() failed: ");
+				exit(2);
+			}
+			// Add the token to the cLine->arguments[] array.
+			strcpy(cLine->arguments[spaces - 1], token);
+			token = strtok(NULL, " ");// Clear the token.
+			cLine->argCount++;
 		}
-		// Note arguments is a 2D array, so malloc for each argument assigned by token.
-		cLine->arguments[spaces-1] = malloc(sizeof(char*) * strlen(token));
-		if (cLine->arguments[spaces-1] == NULL) {
-			perror("Call to malloc() failed: ");
-			exit(2);
-		}
-
-		strcpy(cLine->arguments[spaces -1], token);
-		token = strtok(NULL, " ");
-		cLine->argCount++;
+		else { break; }// Stop processing this line.
 	}
 
 	/*// Print the resulting Array (for debugging).
