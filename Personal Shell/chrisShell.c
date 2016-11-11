@@ -24,20 +24,20 @@ void printStatus(int status);
 void usage();
 
 int main() {
-	char* argv[512];			// Max argv 512 per specifications.
-	int argc = 0;				// Running argument count on command line input.
-	char input[2049];			// Max characters 2,048 + null terminator.
-	char* inFileName = NULL;		// Input file name.
+	char* argv[512];		// Max argv 512 per specifications.
+	int argc = 0;			// Running argument count on command line input.
+	char input[2049];		// Max characters 2,048 + null terminator.
+	char* inFileName = NULL;	// Input file name.
 	char* outFileName = NULL;	// Output file name.
 	char seperator[3] = " \n";	// Seperate command line strings by " " or "\n".
-	char* token;				// Holder for individual command string words.
+	char* token;			// Holder for individual command string words.
 	bool isBackgrounded;		// Process in background bool.
-	int fd = -1;				// Input file descriptor for file operations set to error.
+	int fd = -1;			// Input file descriptor for file operations set to error.
 	int status = 0;			// Holder int for process status info.
-	pid_t pid;				// Process pid.
+	pid_t pid;			// Process pid.
 
 	// Declare and initialize signal handler to ignore SIGINT (15) signal.
-	struct sigaction notify;			// Declare signal handler struct.
+	struct sigaction notify;		// Declare signal handler struct.
 	notify.sa_handler = SIG_IGN;		// Set handler attribute to simply SIG_IGN.
 	notify.sa_flags = 0;			// No flags needed.
 	sigfillset(&notify.sa_mask);		// Set a mask that that masks all signals to notify struct.
@@ -50,7 +50,7 @@ int main() {
 		fflush(stdout);     // Flush stdout prompt.
 
 		// Get smallsh's command line user input.
-		if (fgets(input, 2049, stdin) == NULL) {// fgets() returns NULL on error.				[5]
+		if (fgets(input, 2049, stdin) == NULL) {// fgets() returns NULL on error.		[5]
 			return 0;
 		}
 
@@ -117,9 +117,9 @@ int main() {
 				status = 1;
 				break;
 
-			case 0:     // Child.
+			case 0:     // Child.		 			   [7]
 				if (!isBackgrounded) {				// Set up Child process for signals.
-					notify.sa_handler = SIG_DFL;		// Set handler to "no function".		 [7]
+					notify.sa_handler = SIG_DFL;		// Set handler to "no function".
 					sigaction(SIGINT, &notify, NULL);	// Register signal handler for Child process.
 				}
 				// Infile redirection setup.
@@ -130,7 +130,7 @@ int main() {
 						fflush(stdout);
 						_Exit(1);
 					}
-					// Child gets duplicate file descriptor inFileName.					[8]
+					// Child gets duplicate file descriptor inFileName.			[8]
 					if (dup2(fd, 0) == -1) {// 0 means 'stdin'.
 						perror("Error: call to dup2() failed ");
 						_Exit(1);
@@ -223,7 +223,7 @@ int main() {
 
 		// Check for finished background processes.
 		pid = waitpid(-1, &status, WNOHANG);
-		// Check them all (-1 returned on waitpid() failure).								[10]
+		// Check them all (-1 returned on waitpid() failure).						[10]
 		while (pid > 0) {
 			printf("Backgrounded pid %i finished: ", pid);
 			fflush(stdout);
@@ -237,7 +237,7 @@ int main() {
 }
 
 
-/* Prints status of last command executed succesfully or otherwise.							[11]
+/* Prints status of last command executed succesfully or otherwise.						[11]
 *  param: status	- Updated by smallsh during command processing.
 *  param: status	- Alternativly, signal status passed and printed. */
 void printStatus(int status) {
