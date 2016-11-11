@@ -4,8 +4,8 @@ CC=gcc
 CFLAGS=-g -Wall
 
 all:
-	gcc chrisShell.c -o smallsh -g -Wall
+	gcc chrisShell.c -o chrisSh -g -Wall
 
 clean:
-	rm -f smallsh
+	rm -f chrisSh
 
