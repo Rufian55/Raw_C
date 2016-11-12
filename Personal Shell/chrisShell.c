@@ -98,7 +98,7 @@ int main() {
 		if (argv[0] == NULL || *(argv[0]) == '#') {
 			;// ...doing nothing.  There is no 'NOP' command in C...
 		}
-		// "cd" - Change Directory.													[6]
+		// "cd" - Change Directory.										[6]
 		else if (strcmp(argv[0], "cd") == 0) {
 			if (argv[1] == NULL) {
 				chdir(getenv("HOME"));
@@ -131,7 +131,7 @@ int main() {
 
 			case 0:     // Child.
 				if (!isBackgrounded) {				// Set up Child process for signals.
-					child.sa_handler = SIG_DFL;		// Set handler to "no function".		 [7]
+					child.sa_handler = SIG_DFL;		// Set handler to "no function".		[7]
 					sigaction(SIGINT, &child, NULL);	// Register signal handler for Child process.
 				}
 				// Infile redirection setup.
@@ -140,7 +140,7 @@ int main() {
 					if (fd == -1) {
 						printf("Error: cannot open '%s' for input.\n", inFileName);
 						fflush(stdout);
-						_exit(EXIT_FAILURE);//										[8]
+						_exit(EXIT_FAILURE);//								[8]
 					}
 					else { // Close fd on execvp() call.
 						fcntl(fd, F_SETFD, FD_CLOEXEC);
