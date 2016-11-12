@@ -2,7 +2,7 @@
 * Chris Kearns, CS344-400-F16, Project 3, 17 Nov 2016, kearnsc@oregonstate.edu
 * smallsh.c a "personal" shell written in C, designed to be used in a
 * linux bash environment.  Handles built-n commands "cd", "status", and "exit".
-* Also handles redirection with "<" and ">", comments wiht "#", and 
+* Also handles redirection with "<" and ">", comments with "#", and 
 * backgrounding of processes with "&".
 * Usage is: [arg1 arg2 ...arg512][< input_file][> output_file][&]
 * Note: max argv: 512, max chars: 2,048.
@@ -22,26 +22,35 @@
 // Prototypes.
 void printStatus(int status);
 void usage();
+void cntlC(int signo);
 
 int main() {
-	char* argv[512];		// Max argv 512 per specifications.
-	int argc = 0;			// Running argument count on command line input.
-	char input[2049];		// Max characters 2,048 + null terminator.
-	char* inFileName = NULL;	// Input file name.
+	char* argv[512];			// Max argv 512 per specifications.
+	int argc = 0;				// Running argument count on command line input.
+	char input[2049];			// Max characters 2,048 + null terminator.
+	char* inFileName = NULL;		// Input file name.
 	char* outFileName = NULL;	// Output file name.
 	char seperator[3] = " \n";	// Seperate command line strings by " " or "\n".
-	char* token;			// Holder for individual command string words.
+	char* token;				// Holder for individual command string words.
 	bool isBackgrounded;		// Process in background bool.
-	int fd = -1;			// Input file descriptor for file operations set to error.
+	int fd = -1;				// File descriptor for file operations set to error.
+	int fd2 = -1;				// File descriptor for file operations set to error, for dup2().
 	int status = 0;			// Holder int for process status info.
-	pid_t pid;			// Process pid.
+	pid_t pid;				// Process pid.
 
 	// Declare and initialize signal handler to ignore SIGINT (15) signal.
-	struct sigaction notify;		// Declare signal handler struct.
-	notify.sa_handler = SIG_IGN;		// Set handler attribute to simply SIG_IGN.
+	struct sigaction notify;			// Declare signal handler struct.
+	notify.sa_handler = SIG_IGN;		// Set handler attribute to macro SIG_IGN vs. cntlC;
 	notify.sa_flags = 0;			// No flags needed.
 	sigfillset(&notify.sa_mask);		// Set a mask that that masks all signals to notify struct.
 	sigaction(SIGINT, &notify, NULL);	// Set SIGINT to be handled by struct notify.		[2][3][4]
+
+	// Declare and initialize signal handler to for children to handle Ctrl C (signal 2).
+	struct sigaction child;			// Declare signal handler struct.
+	child.sa_handler = cntlC;		// Set handler attribute to function cntlC vs. SIG_IGN;
+	child.sa_flags = 0;				// No flags needed.
+	sigfillset(&child.sa_mask);		// Set a mask that that masks all signals to notify struct.
+	sigaction(SIGINT, &child, NULL);	// Set SIGINT to be handled by struct notify.
 
 	// Run shell.
 	while (true) {
@@ -50,7 +59,7 @@ int main() {
 		fflush(stdout);     // Flush stdout prompt.
 
 		// Get smallsh's command line user input.
-		if (fgets(input, 2049, stdin) == NULL) {// fgets() returns NULL on error.		[5]
+		if (fgets(input, 2049, stdin) == NULL) {// fgets() returns NULL on error.				[5]
 			return 0;
 		}
 
@@ -95,7 +104,10 @@ int main() {
 				chdir(getenv("HOME"));
 			}
 			else {
-				chdir(argv[1]);
+				if (chdir(argv[1]) == -1) {
+					perror("Error: call to chdir() failed ");
+					status = 1;
+				}
 			}
 		}
 		// "status" - Print status information.
@@ -117,10 +129,10 @@ int main() {
 				status = 1;
 				break;
 
-			case 0:     // Child.		 			   [7]
+			case 0:     // Child.
 				if (!isBackgrounded) {				// Set up Child process for signals.
-					notify.sa_handler = SIG_DFL;		// Set handler to "no function".
-					sigaction(SIGINT, &notify, NULL);	// Register signal handler for Child process.
+					child.sa_handler = SIG_DFL;		// Set handler to "no function".		 [7]
+					sigaction(SIGINT, &child, NULL);	// Register signal handler for Child process.
 				}
 				// Infile redirection setup.
 				if (inFileName != NULL && !isBackgrounded) {
@@ -128,28 +140,35 @@ int main() {
 					if (fd == -1) {
 						printf("Error: cannot open '%s' for input.\n", inFileName);
 						fflush(stdout);
-						_Exit(1);
+						_exit(EXIT_FAILURE);//										[8]
 					}
-					// Child gets duplicate file descriptor inFileName.			[8]
+					else { // Close fd on execvp() call.
+						fcntl(fd, F_SETFD, FD_CLOEXEC);
+					}
+					// Child gets duplicate file descriptor inFileName.					[9]
 					if (dup2(fd, 0) == -1) {// 0 means 'stdin'.
 						perror("Error: call to dup2() failed ");
-						_Exit(1);
+						_exit(EXIT_FAILURE);
 					}
-					close(fd);
 				}
 				else if (inFileName != NULL && isBackgrounded) {
 					// Inhibit background processes from stdin (keyboard) input.
-					fd = open("/dev/null", O_RDONLY);
+					inFileName = "dev/null";
+					fd = open(inFileName, O_RDONLY);
 					if (fd == -1) {
 						// Error with open().
 						perror("Error: call to open() failed ");
-						_Exit(1);
+						_exit(EXIT_FAILURE);
+					}
+					else { // Close fd on execvp() call.
+						fcntl(fd, F_SETFD, FD_CLOEXEC);
 					}
 					// Child gets duplicate file descriptor, "/dev/null"
-					if (dup2(fd, 0) == -1) {// 0 means 'stdin'.
+					fd2 = dup2(fd, 0);// 0 means 'stdin'.
+					if (fd2 == -1) {
 						// Error with dup2().
 						perror("Error: call to dup2() failed ");
-						_Exit(1);
+						_exit(EXIT_FAILURE);
 					}
 				}
 
@@ -161,29 +180,36 @@ int main() {
 					if (fd == -1) {
 						printf("Error: cannot open '%s' for output.\n", outFileName);
 						fflush(stdout);
-						_Exit(1);
+						_exit(EXIT_FAILURE);
+					}
+					else { // Close fd on execvp() call.
+						fcntl(fd, F_SETFD, FD_CLOEXEC);
 					}
 					// Child gets duplicate file descriptor, "outFileName".
 					if (dup2(fd, 1) == -1) {// 1 means 'stdout'.
 						// Error with dup2().
 						perror("Error: call to dup2() failed ");
-						_Exit(1);
+						_exit(EXIT_FAILURE);
 					}
-					close(fd);
 				}
 				else if (outFileName != NULL && isBackgrounded) {
 					// Inhibit background processes from stdout (terminal) output.
-					fd = open("/dev/null", O_WRONLY);
+					outFileName = "/dev/null";
+					fd = open(outFileName, O_WRONLY);
 					if (fd == -1) {
 						// Error with open().
 						perror("Error: call to open() failed ");
-						_Exit(1);
+						_exit(EXIT_FAILURE);
+					}
+					else { // Close fd on execvp() call.
+						fcntl(fd, F_SETFD, FD_CLOEXEC);
 					}
 					// Child gets duplicate file descriptor, "/dev/null"
-					if (dup2(fd, 1) == -1) {// 1 means 'stdout'.
+					fd2 = dup2(fd, 1);// 1 means 'stdout'.
+					if (fd2 == -1) {
 						// Error with dup2().
 						perror("Error: call to dup2() failed ");
-						_Exit(1);
+						_exit(EXIT_FAILURE);
 					}
 				}
 				// Finally, execute the command.
@@ -191,12 +217,14 @@ int main() {
 					// Error with exec.
 					printf("Error: '%s' command not found.\n", argv[0]);
 					fflush(stdout);
-					_Exit(1);
+					_exit(EXIT_FAILURE);
 				}
+				printf("\n");
+				fflush(stdout);
 				break;
 
 			default:	// Parent.
-				if (!isBackgrounded) {
+				if (!isBackgrounded) {// !isbg
 					// Wait for foreground process to complete.
 					waitpid(pid, &status, 0);
 				}
@@ -204,6 +232,7 @@ int main() {
 					// Print background process pid.
 					printf("Backgrounded pid is %i\n", pid);
 					fflush(stdout);
+					waitpid(pid, &status, WNOHANG);
 					break;
 				}
 			}
@@ -214,7 +243,7 @@ int main() {
 		for (i = 0; argv[i] != NULL; ++i) {
 			free(argv[i]);
 		}
-		/* Calls to strdup() use malloc() to allocate memory for the duplicate				[9]
+		/* Calls to strdup() use malloc() to allocate memory for the duplicate				[10]
 		   string, so free c-strings and pointers here on each loop iteration. */
 		free(inFileName);
 		inFileName = NULL;
@@ -223,8 +252,8 @@ int main() {
 
 		// Check for finished background processes.
 		pid = waitpid(-1, &status, WNOHANG);
-		// Check them all (-1 returned on waitpid() failure).						[10]
-		while (pid > 0) {
+		// Check them all (-1 returned on waitpid() failure).								[11]
+		while (pid > 0 && !isBackgrounded) {
 			printf("Backgrounded pid %i finished: ", pid);
 			fflush(stdout);
 			printStatus(status);
@@ -237,7 +266,7 @@ int main() {
 }
 
 
-/* Prints status of last command executed succesfully or otherwise.						[11]
+/* Prints status of last command executed succesfully or otherwise.							[12]
 *  param: status	- Updated by smallsh during command processing.
 *  param: status	- Alternativly, signal status passed and printed. */
 void printStatus(int status) {
@@ -261,6 +290,20 @@ void usage() {
 }
 
 
+/* Signal Handler cntlC() contains a simple re-entrant safe write() for printing
+   the terminated by signal message upon receipt of Ctrl C (signal 2). Not used.
+   experimental... */
+void cntlC(int signo) {
+	if (signo == 2) {
+		size_t length = snprintf(NULL, 0, "Terminated by signal %i\n", signo);
+		char buffer[length];
+		snprintf(buffer, length, "Terminated by signal %i\n", signo);
+		write(STDOUT_FILENO, buffer, length);
+		fflush(stdout); 
+	}
+}
+
+
 /* CITATIONS: All code by author and where indicated, adapted from the below sources:
 [1] Various BLOCK 3 lectures and slides, Prof. B. Brewster, Oregon State University, CS344-400-F16.
 [2] http://stackoverflow.com/questions/24393363/what-is-the-meaning-of-sigfillset-do-i-really-needed-it-in-my-implementation
@@ -269,8 +312,9 @@ void usage() {
 [5] http://stackoverflow.com/questions/21679063/return-value-of-fgets
 [6] https://www.tutorialspoint.com/c_standard_library/c_function_getenv.htm
 [7] http://en.cppreference.com/w/c/program/SIG_strategies
-[8] http://man7.org/linux/man-pages/man2/dup.2.html
-[9] https://linux.die.net/man/3/strdup
-[10] https://www.google.com/webhp?sourceid=chrome-instant&ion=1&espv=2&ie=UTF-8#q=what%20does%20waitpid%20return
-[11] http://pubs.opengroup.org/onlinepubs/9699919799/functions/wait.html
+[8] http://stackoverflow.com/questions/5422831/what-is-the-difference-between-using-exit-exit-in-a-conventional-linux-fo
+[9] http://man7.org/linux/man-pages/man2/dup.2.html
+[10] https://linux.die.net/man/3/strdup
+[11] https://www.google.com/webhp?sourceid=chrome-instant&ion=1&espv=2&ie=UTF-8#q=what%20does%20waitpid%20return
+[12] http://pubs.opengroup.org/onlinepubs/9699919799/functions/wait.html
 */
