@@ -25,21 +25,21 @@ void usage();
 void cntlC(int signo);
 
 int main() {
-	char* argv[512];			// Max argv 512 per specifications.
-	int argc = 0;				// Running argument count on command line input.
-	char input[2049];			// Max characters 2,048 + null terminator.
-	char* inFileName = NULL;		// Input file name.
+	char* argv[512];		// Max argv 512 per specifications.
+	int argc = 0;			// Running argument count on command line input.
+	char input[2049];		// Max characters 2,048 + null terminator.
+	char* inFileName = NULL;	// Input file name.
 	char* outFileName = NULL;	// Output file name.
 	char seperator[3] = " \n";	// Seperate command line strings by " " or "\n".
-	char* token;				// Holder for individual command string words.
+	char* token;			// Holder for individual command string words.
 	bool isBackgrounded;		// Process in background bool.
-	int fd = -1;				// File descriptor for file operations set to error.
-	int fd2 = -1;				// File descriptor for file operations set to error, for dup2().
+	int fd = -1;			// File descriptor for file operations set to error.
+	int fd2 = -1;			// File descriptor for file operations set to error, for dup2().
 	int status = 0;			// Holder int for process status info.
-	pid_t pid;				// Process pid.
+	pid_t pid;			// Process pid.
 
 	// Declare and initialize signal handler to ignore SIGINT (15) signal.
-	struct sigaction notify;			// Declare signal handler struct.
+	struct sigaction notify;		// Declare signal handler struct.
 	notify.sa_handler = SIG_IGN;		// Set handler attribute to macro SIG_IGN vs. cntlC;
 	notify.sa_flags = 0;			// No flags needed.
 	sigfillset(&notify.sa_mask);		// Set a mask that that masks all signals to notify struct.
@@ -48,15 +48,15 @@ int main() {
 	// Declare and initialize signal handler to for children to handle Ctrl C (signal 2).
 	struct sigaction child;			// Declare signal handler struct.
 	child.sa_handler = cntlC;		// Set handler attribute to function cntlC vs. SIG_IGN;
-	child.sa_flags = 0;				// No flags needed.
+	child.sa_flags = 0;			// No flags needed.
 	sigfillset(&child.sa_mask);		// Set a mask that that masks all signals to notify struct.
 	sigaction(SIGINT, &child, NULL);	// Set SIGINT to be handled by struct notify.
 
 	// Run shell.
 	while (true) {
 		isBackgrounded = 0;	// Default to parent process in foreground.
-		printf(": ");       // Print prompt. Extra space for readability of output.
-		fflush(stdout);     // Flush stdout prompt.
+		printf(": ");       	// Print prompt. Extra space for readability of output.
+		fflush(stdout);     	// Flush stdout prompt.
 
 		// Get smallsh's command line user input.
 		if (fgets(input, 2049, stdin) == NULL) {// fgets() returns NULL on error.				[5]
@@ -252,7 +252,7 @@ int main() {
 
 		// Check for finished background processes.
 		pid = waitpid(-1, &status, WNOHANG);
-		// Check them all (-1 returned on waitpid() failure).								[11]
+		// Check them all (-1 returned on waitpid() failure).						[11]
 		while (pid > 0 && !isBackgrounded) {
 			printf("Backgrounded pid %i finished: ", pid);
 			fflush(stdout);
@@ -266,7 +266,7 @@ int main() {
 }
 
 
-/* Prints status of last command executed succesfully or otherwise.							[12]
+/* Prints status of last command executed succesfully or otherwise.						[12]
 *  param: status	- Updated by smallsh during command processing.
 *  param: status	- Alternativly, signal status passed and printed. */
 void printStatus(int status) {
