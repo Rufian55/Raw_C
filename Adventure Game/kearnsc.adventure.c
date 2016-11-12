@@ -58,8 +58,8 @@ char g_selected[NUM_ROOMS][NAME_BUFFER_LEN];
 
 // Color selected c-string array for colorizing room names, time string, and console default. [13]
 char *color[12] = { "\x1b[38;5;21m", "\x1b[38;5;130m", "\x1b[38;5;6m", "\x1b[38;5;2m",
-				"\x1b[38;5;99m", "\x1b[38;5;201m", "\x1b[38;5;1m", "\x1b[38;5;247m",
-				"\x1b[15m", "\x1b[38;5;3m", "\x1b[m", "\x1b[38;5;69m" };
+		    "\x1b[38;5;99m", "\x1b[38;5;201m", "\x1b[38;5;1m", "\x1b[38;5;247m",
+		    "\x1b[15m", "\x1b[38;5;3m", "\x1b[m", "\x1b[38;5;69m" };
 
 // Initialize mutex lock. [16]
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
