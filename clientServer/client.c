@@ -10,8 +10,8 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
-#include <sys/socket.h>	// Defines socket structs.
-#include <netinet/in.h>	// Contains constants and structs needed for internet domain addresses.
+#include <sys/socket.h>		// Defines socket structs.
+#include <netinet/in.h>		// Contains constants and structs needed for internet domain addresses.
 #include <netdb.h>		// Defines struct hostent.
 
 
@@ -22,22 +22,22 @@ void error(const char *msg) {
 }
 
 int main(int argc, char *argv[]) {
-	char buffer[256];						// Message buffer that stores chars read from the socket connection.
-	int socketFD;							// A socket file descriptor for the socket() call.
-	int portNum;							// The communications port that accepts connections (16 bits).
-	int n;  								// Holder for return values from read() and write() calls.
-	struct sockaddr_in serverAddress;			// Struct containing the internet address of the server as defined in netinet/in.h.
-	struct hostent *server;					// Pointer to struct type hostent as defined in the header file netdb.h
+	char buffer[256];				// Message buffer that stores chars read from the socket connection.
+	int socketFD;					// A socket file descriptor for the socket() call.
+	int portNum;					// The communications port that accepts connections (16 bits).
+	int n;  					// Holder for return values from read() and write() calls.
+	struct sockaddr_in serverAddress;		// Struct containing the internet address of the server as defined in netinet/in.h.
+	struct hostent *server;				// Pointer to struct type hostent as defined in the header file netdb.h
 /*	The struct hosetent definition:
 	struct  hostent {
-		char    *h_name;					// Official name of host.
-		char    **h_aliases;				// Alias list - zero  terminated  array  of  alternate names for the host.
-		int     h_addrtype;					// Host address type returned currently always AF_INET.
-		int     h_length;					// Length of address in bytes.
-		char    **h_addr_list;				// A pointer to a list of network addresses for the named host. Host addresses are
-											returned in network byte order.
+		char    *h_name;			// Official name of host.
+		char    **h_aliases;			// Alias list - zero  terminated  array  of  alternate names for the host.
+		int     h_addrtype;			// Host address type returned currently always AF_INET.
+		int     h_length;			// Length of address in bytes.
+		char    **h_addr_list;			// A pointer to a list of network addresses for the named host. Host addresses are
+								returned in network byte order.
 		#define h_addr  h_addr_list[0]		// h_addr is, for backward compatiblity, an alias for the first address in array of
-											network addresses.
+								network addresses.
 	};
 */
 
