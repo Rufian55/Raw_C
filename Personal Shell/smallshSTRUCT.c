@@ -178,7 +178,7 @@ int main() {
 				}
 				else if (inFileName != NULL && isBackgrounded) {
 					// Add backgrounded pid to storage array.
-//					pushPID2bg(pid);
+					pushPID2bg(pid);
 					// Inhibit background processes from stdin (keyboard) input.
 					inFileName = "dev/null";
 					fd = open(inFileName, O_RDONLY);
@@ -221,7 +221,7 @@ int main() {
 				}
 				else if (outFileName != NULL && isBackgrounded) {
 					// Add backgrounded pid to storage array.
-//					pushPID2bg(pid);
+					pushPID2bg(pid);
 					// Inhibit background processes from stdout (terminal) output.
 					outFileName = "/dev/null";
 					fd = open(outFileName, O_WRONLY);
@@ -280,16 +280,16 @@ int main() {
 		outFileName = NULL;
 
 		// Check for finished background processes.
-//		pid = waitpid(pid, &status, WNOHANG);
+		pid = waitpid(-1, &status, WNOHANG);
 		// Check them all (-1 returned on waitpid() failure).								[11]
-		while (pid > 0 && isInBackground(pid))  {
+		while (pid > 0 && !isInBackground(pid))  {
 			printf("Backgrounded pid %i finished: ", pid);
 			fflush(stdout);
-//			popPID2bg(pid);
+			popPID2bg(pid);
 			printStatus(status);
 			fflush(stdout);
 			// Wait for the next finished process.
-			pid = waitpid(pid, &status, WNOHANG);
+			pid = waitpid(-1, &status, WNOHANG);
 		}
 	}
 	return 0;
