@@ -6,7 +6,9 @@
 * backgrounding of processes with "&".
 * Usage is: [arg1 arg2 ...arg512][< input_file][> output_file][&]
 * Note: max argv: 512, max chars: 2,048.
-* Compile with gcc chrisShell.c -o smallsh -g -Wall.						[1]
+* Compile with gcc smallshSTRUCT.c -o smallsh -g -Wall.						[1]
+* This version includes a struct array to house and kill backgournded processes
+* on exit rather than letting them complete and potentially "Z" for awhile... 
 ******************************************************************************/
 #include <fcntl.h>
 #include <signal.h>
@@ -19,27 +21,45 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+
+/* A "stack" struct housing a pid_t array for
+managing backgrounded process pid's. */
+struct backgrounded_children {
+	int numBGC;		// Number of Back Grounded Children.
+	int capBGC;		// Capacity of bgChildArr.children array.
+	pid_t *children;	// pushPID2bg() has a doubling call to realloc.
+} bgChildArr;
+
+
 // Prototypes.
 void printStatus(int status);
 void usage();
 void cntlC(int signo);
+void initBGC();
+bool isInBackground(pid_t pid);
+void clear_bgChildArr();
+void pushPID2bg(pid_t child);
+pid_t popPID2bg();
+// Signal handlers.
+void manageExit(int signo);
+
 
 int main() {
-	char* argv[512];		// Max argv 512 per specifications.
-	int argc = 0;			// Running argument count on command line input.
-	char input[2049];		// Max characters 2,048 + null terminator.
-	char* inFileName = NULL;	// Input file name.
+	char* argv[512];			// Max argv 512 per specifications.
+	int argc = 0;				// Running argument count on command line input.
+	char input[2049];			// Max characters 2,048 + null terminator.
+	char* inFileName = NULL;		// Input file name.
 	char* outFileName = NULL;	// Output file name.
 	char seperator[3] = " \n";	// Seperate command line strings by " " or "\n".
-	char* token;			// Holder for individual command string words.
+	char* token;				// Holder for individual command string words.
 	bool isBackgrounded;		// Process in background bool.
-	int fd = -1;			// File descriptor for file operations set to error.
-	int fd2 = -1;			// File descriptor for file operations set to error, for dup2().
+	int fd = -1;				// File descriptor for file operations set to error.
+	int fd2 = -1;				// File descriptor for file operations set to error, for dup2().
 	int status = 0;			// Holder int for process status info.
-	pid_t pid;			// Process pid.
+	pid_t pid;				// Process pid.
 
 	// Declare and initialize signal handler to ignore SIGINT (15) signal.
-	struct sigaction notify;		// Declare signal handler struct.
+	struct sigaction notify;			// Declare signal handler struct.
 	notify.sa_handler = SIG_IGN;		// Set handler attribute to macro SIG_IGN vs. cntlC;
 	notify.sa_flags = 0;			// No flags needed.
 	sigfillset(&notify.sa_mask);		// Set a mask that that masks all signals to notify struct.
@@ -48,15 +68,17 @@ int main() {
 	// Declare and initialize signal handler to for children to handle Ctrl C (signal 2).
 	struct sigaction child;			// Declare signal handler struct.
 	child.sa_handler = cntlC;		// Set handler attribute to function cntlC vs. SIG_IGN;
-	child.sa_flags = 0;			// No flags needed.
-	sigfillset(&child.sa_mask);		// Set a mask that that masks all signals to notify struct.
-	sigaction(SIGINT, &child, NULL);	// Set SIGINT to be handled by struct notify.
+	child.sa_flags = 0;				// No flags needed.
+	sigfillset(&child.sa_mask);		// Set a mask that that masks all signals to child struct.
+	sigaction(SIGINT, &child, NULL);	// Set SIGINT to be handled by struct child.
+
+	initBGC();					// Initialize the backgrounded proceses storage array.
 
 	// Run shell.
 	while (true) {
-		isBackgrounded = 0;	// Default to parent process in foreground.
-		printf(": ");       	// Print prompt. Extra space for readability of output.
-		fflush(stdout);     	// Flush stdout prompt.
+		isBackgrounded = false;	// Default to parent process in foreground.
+		printf(": ");			// Print prompt. Extra space for readability of output.
+		fflush(stdout);		// Flush stdout prompt.
 
 		// Get smallsh's command line user input.
 		if (fgets(input, 2049, stdin) == NULL) {// fgets() returns NULL on error.				[5]
@@ -81,7 +103,7 @@ int main() {
 			}
 			else if (strcmp(token, "&") == 0) {
 				// & token indicates process to be run in background.
-				isBackgrounded = 1;
+				isBackgrounded = true;
 				break;
 			}
 			else {
@@ -98,7 +120,7 @@ int main() {
 		if (argv[0] == NULL || *(argv[0]) == '#') {
 			;// ...doing nothing.  There is no 'NOP' command in C...
 		}
-		// "cd" - Change Directory.										[6]
+		// "cd" - Change Directory.													[6]
 		else if (strcmp(argv[0], "cd") == 0) {
 			if (argv[1] == NULL) {
 				chdir(getenv("HOME"));
@@ -116,13 +138,16 @@ int main() {
 		}
 		// "exit".
 		else if (strcmp(argv[0], "exit") == 0) {
-			exit(0);
+			_exit(0);
 		}
 
 		/* PROCESS AS A BASH COMMAND */
 		else {
 			// Fork parent process, call execvp on command.
 			pid = fork();
+			if (isBackgrounded) {
+				pushPID2bg(pid);
+			}
 			switch (pid) {
 			case -1:	// Error with call to fork().
 				perror("Error: call to fork() failed ");
@@ -131,7 +156,7 @@ int main() {
 
 			case 0:     // Child.
 				if (!isBackgrounded) {				// Set up Child process for signals.
-					child.sa_handler = SIG_DFL;		// Set handler to "no function".		[7]
+					child.sa_handler = SIG_DFL;		// Set handler to "no function".		 [7]
 					sigaction(SIGINT, &child, NULL);	// Register signal handler for Child process.
 				}
 				// Infile redirection setup.
@@ -140,7 +165,7 @@ int main() {
 					if (fd == -1) {
 						printf("Error: cannot open '%s' for input.\n", inFileName);
 						fflush(stdout);
-						_exit(EXIT_FAILURE);//								[8]
+						_exit(EXIT_FAILURE);//										[8]
 					}
 					else { // Close fd on execvp() call.
 						fcntl(fd, F_SETFD, FD_CLOEXEC);
@@ -152,6 +177,8 @@ int main() {
 					}
 				}
 				else if (inFileName != NULL && isBackgrounded) {
+					// Add backgrounded pid to storage array.
+//					pushPID2bg(pid);
 					// Inhibit background processes from stdin (keyboard) input.
 					inFileName = "dev/null";
 					fd = open(inFileName, O_RDONLY);
@@ -193,6 +220,8 @@ int main() {
 					}
 				}
 				else if (outFileName != NULL && isBackgrounded) {
+					// Add backgrounded pid to storage array.
+//					pushPID2bg(pid);
 					// Inhibit background processes from stdout (terminal) output.
 					outFileName = "/dev/null";
 					fd = open(outFileName, O_WRONLY);
@@ -224,7 +253,7 @@ int main() {
 				break;
 
 			default:	// Parent.
-				if (!isBackgrounded) {// !isbg
+				if (!isBackgrounded) {
 					// Wait for foreground process to complete.
 					waitpid(pid, &status, 0);
 				}
@@ -251,22 +280,23 @@ int main() {
 		outFileName = NULL;
 
 		// Check for finished background processes.
-		pid = waitpid(-1, &status, WNOHANG);
-		// Check them all (-1 returned on waitpid() failure).						[11]
-		while (pid > 0 && !isBackgrounded) {
+//		pid = waitpid(pid, &status, WNOHANG);
+		// Check them all (-1 returned on waitpid() failure).								[11]
+		while (pid > 0 && isInBackground(pid))  {
 			printf("Backgrounded pid %i finished: ", pid);
 			fflush(stdout);
+//			popPID2bg(pid);
 			printStatus(status);
 			fflush(stdout);
 			// Wait for the next finished process.
-			pid = waitpid(-1, &status, WNOHANG);
+			pid = waitpid(pid, &status, WNOHANG);
 		}
 	}
 	return 0;
 }
 
 
-/* Prints status of last command executed succesfully or otherwise.						[12]
+/* Prints status of last command executed succesfully or otherwise.							[12]
 *  param: status	- Updated by smallsh during command processing.
 *  param: status	- Alternativly, signal status passed and printed. */
 void printStatus(int status) {
@@ -291,15 +321,76 @@ void usage() {
 
 
 /* Signal Handler cntlC() contains a simple re-entrant safe write() for printing
-   the terminated by signal message upon receipt of Ctrl C (signal 2). Not used.
-   experimental... */
+   the terminated by signal message upon receipt of Ctrl C (signal 2). */
 void cntlC(int signo) {
 	if (signo == 2) {
-		size_t length = snprintf(NULL, 0, "Terminated by signal %i\n", signo);
-		char buffer[length];
-		snprintf(buffer, length, "Terminated by signal %i\n", signo);
-		write(STDOUT_FILENO, buffer, length);
-		fflush(stdout); 
+		char buffer[] = " Terminated by signal 2\n";
+		write(STDOUT_FILENO, buffer, 24);
+		fflush(stdout);
+	}
+}
+
+/* Backgrounded Processes Struct Array Management Functions. */
+
+/* Initialize the stack of backgrounded child processes. */
+void initBGC() {
+	bgChildArr.numBGC = 0;
+	bgChildArr.capBGC = 4;
+	bgChildArr.children = malloc(bgChildArr.capBGC * sizeof(pid_t));
+}
+
+
+/* Push child process pid onto the struct stack of backgrounded child processes.
+*  param: child - The pid of a child process pushed. */
+void pushPID2bg(pid_t child) {
+	if (bgChildArr.numBGC == bgChildArr.capBGC) {
+		bgChildArr.capBGC *= 2;
+		bgChildArr.children = realloc(bgChildArr.children, (bgChildArr.capBGC * sizeof(pid_t)));
+	}
+	bgChildArr.children[bgChildArr.numBGC] = child;
+	bgChildArr.numBGC++;
+}
+
+/* Pop a backgrounded child process off the stack and
+*  returns:	pid of the popped child process or 0 if empty. */
+pid_t popPID2bg() {
+	if (bgChildArr.numBGC > 0) {
+		bgChildArr.numBGC--;
+		return bgChildArr.children[bgChildArr.numBGC + 1];
+	}
+	else {
+		return 0;
+	}
+}
+
+
+/* Determines whether a process was backgrounded.
+*  param: pid - a running child process. */
+bool isInBackground(pid_t pid) {
+	int i;
+	for (i = 0; i < bgChildArr.numBGC; i++) {
+		if (pid == bgChildArr.children[i]) {
+			return true;
+		}
+	}
+	return false;
+}
+
+
+/* Destroy the stack of backgrounded child processes. */
+void clear_bgChildArr() {
+	free(bgChildArr.children);
+}
+
+
+/* Manage the exit process by killing all backgrounded children on the struct stack.
+*  param: signo (ignored). */
+void manageExit(int signo) {
+	pid_t child;
+	int i;
+	for (i = 0; i < bgChildArr.numBGC; i++) {
+		child = popPID2bg();
+		kill(child, SIGINT);
 	}
 }
 
