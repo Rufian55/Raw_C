@@ -45,21 +45,21 @@ void manageExit(int signo);
 
 
 int main() {
-	char* argv[512];			// Max argv 512 per specifications.
-	int argc = 0;				// Running argument count on command line input.
-	char input[2049];			// Max characters 2,048 + null terminator.
-	char* inFileName = NULL;		// Input file name.
+	char* argv[512];		// Max argv 512 per specifications.
+	int argc = 0;			// Running argument count on command line input.
+	char input[2049];		// Max characters 2,048 + null terminator.
+	char* inFileName = NULL;	// Input file name.
 	char* outFileName = NULL;	// Output file name.
 	char seperator[3] = " \n";	// Seperate command line strings by " " or "\n".
-	char* token;				// Holder for individual command string words.
+	char* token;			// Holder for individual command string words.
 	bool isBackgrounded;		// Process in background bool.
-	int fd = -1;				// File descriptor for file operations set to error.
-	int fd2 = -1;				// File descriptor for file operations set to error, for dup2().
+	int fd = -1;			// File descriptor for file operations set to error.
+	int fd2 = -1;			// File descriptor for file operations set to error, for dup2().
 	int status = 0;			// Holder int for process status info.
-	pid_t pid;				// Process pid.
+	pid_t pid;			// Process pid.
 
 	// Declare and initialize signal handler to ignore SIGINT (15) signal.
-	struct sigaction notify;			// Declare signal handler struct.
+	struct sigaction notify;		// Declare signal handler struct.
 	notify.sa_handler = SIG_IGN;		// Set handler attribute to macro SIG_IGN vs. cntlC;
 	notify.sa_flags = 0;			// No flags needed.
 	sigfillset(&notify.sa_mask);		// Set a mask that that masks all signals to notify struct.
@@ -68,16 +68,16 @@ int main() {
 	// Declare and initialize signal handler to for children to handle Ctrl C (signal 2).
 	struct sigaction child;			// Declare signal handler struct.
 	child.sa_handler = cntlC;		// Set handler attribute to function cntlC vs. SIG_IGN;
-	child.sa_flags = 0;				// No flags needed.
+	child.sa_flags = 0;			// No flags needed.
 	sigfillset(&child.sa_mask);		// Set a mask that that masks all signals to child struct.
 	sigaction(SIGINT, &child, NULL);	// Set SIGINT to be handled by struct child.
 
-	initBGC();					// Initialize the backgrounded proceses storage array.
+	initBGC();				// Initialize the backgrounded proceses storage array.
 
 	// Run shell.
 	while (true) {
 		isBackgrounded = false;	// Default to parent process in foreground.
-		printf(": ");			// Print prompt. Extra space for readability of output.
+		printf(": ");		// Print prompt. Extra space for readability of output.
 		fflush(stdout);		// Flush stdout prompt.
 
 		// Get smallsh's command line user input.
@@ -120,7 +120,7 @@ int main() {
 		if (argv[0] == NULL || *(argv[0]) == '#') {
 			;// ...doing nothing.  There is no 'NOP' command in C...
 		}
-		// "cd" - Change Directory.													[6]
+		// "cd" - Change Directory.										[6]
 		else if (strcmp(argv[0], "cd") == 0) {
 			if (argv[1] == NULL) {
 				chdir(getenv("HOME"));
@@ -165,7 +165,7 @@ int main() {
 					if (fd == -1) {
 						printf("Error: cannot open '%s' for input.\n", inFileName);
 						fflush(stdout);
-						_exit(EXIT_FAILURE);//										[8]
+						_exit(EXIT_FAILURE);//								[8]
 					}
 					else { // Close fd on execvp() call.
 						fcntl(fd, F_SETFD, FD_CLOEXEC);
@@ -178,7 +178,7 @@ int main() {
 				}
 				else if (inFileName != NULL && isBackgrounded) {
 					// Add backgrounded pid to storage array.
-//					pushPID2bg(pid);
+					pushPID2bg(pid);
 					// Inhibit background processes from stdin (keyboard) input.
 					inFileName = "dev/null";
 					fd = open(inFileName, O_RDONLY);
@@ -221,7 +221,7 @@ int main() {
 				}
 				else if (outFileName != NULL && isBackgrounded) {
 					// Add backgrounded pid to storage array.
-//					pushPID2bg(pid);
+					pushPID2bg(pid);
 					// Inhibit background processes from stdout (terminal) output.
 					outFileName = "/dev/null";
 					fd = open(outFileName, O_WRONLY);
@@ -280,12 +280,12 @@ int main() {
 		outFileName = NULL;
 
 		// Check for finished background processes.
-//		pid = waitpid(pid, &status, WNOHANG);
-		// Check them all (-1 returned on waitpid() failure).								[11]
+		pid = waitpid(pid, &status, WNOHANG);
+		// Check them all (-1 returned on waitpid() failure).						[11]
 		while (pid > 0 && isInBackground(pid))  {
 			printf("Backgrounded pid %i finished: ", pid);
 			fflush(stdout);
-//			popPID2bg(pid);
+			popPID2bg(pid);
 			printStatus(status);
 			fflush(stdout);
 			// Wait for the next finished process.
@@ -296,7 +296,7 @@ int main() {
 }
 
 
-/* Prints status of last command executed succesfully or otherwise.							[12]
+/* Prints status of last command executed succesfully or otherwise.						[12]
 *  param: status	- Updated by smallsh during command processing.
 *  param: status	- Alternativly, signal status passed and printed. */
 void printStatus(int status) {
