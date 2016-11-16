@@ -20,24 +20,24 @@ void error(const char *msg) {
 }
 
 int main(int argc, char *argv[]) {
-	int socketFD;							// A socket file descriptor for the socket() call.
-	int newSocketFD;						// Another socket file descriptor but for accept() call.
-	int portNum;							// The communications port that accepts connections (16 bits).
+	int socketFD;					// A socket file descriptor for the socket() call.
+	int newSocketFD;				// Another socket file descriptor but for accept() call.
+	int portNum;					// The communications port that accepts connections (16 bits).
 	socklen_t clientAddressLength;			// Unsigned int type of length of at least 32
-										//   bits used to evaluate the sizeof clientAddress.
-	char buffer[256];						// Message buffer that stores chars read from the socket connection.
-	struct sockaddr_in serverAddress;			// Struct containing the internet address of the server as defined in netinet/in.h.
-	struct sockaddr_in clientAddress;			// Struct containing the internet address of the client that connects. 
+							//   bits used to evaluate the sizeof clientAddress.
+	char buffer[256];				// Message buffer that stores chars read from the socket connection.
+	struct sockaddr_in serverAddress;		// Struct containing the internet address of the server as defined in netinet/in.h.
+	struct sockaddr_in clientAddress;		// Struct containing the internet address of the client that connects. 
 
 /*   The below struct is defined for you in the netinet/in.h library:
 	struct sockaddr_in {
-		short sin_family;					// Must be AF_INET.
-		u_short sin_port;					//  
-		struct in_addr sin_addr;				// in_addr struct contains only one field: unsigned long s_addr.
-		char sin_zero[8];					// Not used, must be zero.
+		short sin_family;			// Must be AF_INET.
+		u_short sin_port;  
+		struct in_addr sin_addr;		// in_addr struct contains only one field: unsigned long s_addr.
+		char sin_zero[8];			// Not used, must be zero.
 	};
 */
-	int n;  								// Holder for return values from read() and write() calls.
+	int n;  					// Holder for return values from read() and write() calls.
 
 	// Check usage syntax - run in background!.
 	if (argc < 2) {
