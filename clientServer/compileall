@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# Bash script "compileall" compiles all 5 programs for Project 4.
+
+gcc otp_dec.c -o otp_dec -g -Wall
+
+gcc otp_dec_d.c -o otp_dec_d -g -Wall
+
+gcc otp_enc.c -o otp_enc -g -Wall
+
+gcc otp_enc_d.c -o otp_enc_d -g -Wall
+
+gcc keygen.c -o keygen -g -Wall
+
