@@ -1,14 +1,20 @@
 /******************************************************************************
+* Chris Kearns, CS344-400-F16, Proejct 4, kearnsc@oregonstate.edu 2 Dec 2016
+*
+* otp_enc_d stands for "One Time Pad Encryption Daemon".
+*
 * otp_enc_d.c is a simple single purpose server that listens on the user
 * inputted port/socket that, once connected with the otp_enc client (only!),
 * accepts a key (see also keygen.c) and a plaintext message. These are used to 
 * generate and write back an encrypted ciphertext to otp_enc connected process. 
-* This is a background "daemon" like program.
-* Usage is: otp_enc_d {int listening_port_number} & where int 
-* listenting_port_number is an int from 2000 to 65535 inclusive. Compile with 
-* the "compileall" bash script or individually:
-* gcc otp_enc_d.c -o otp_enc_d -g -Wall								[1]
+*
+* This is a background "daemon like" program.
+* Usage is: otp_enc_d {int listening_port_number} &
+*    where int listenting_port_number is an int from 2000 to 65535 inclusive.
+* Compile with the "compileall" bash script or individually:
+* gcc otp_enc_d.c -o otp_enc_d -g -Wall	   Socket code adapated from [1][2][3]
 ******************************************************************************/
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -20,6 +26,7 @@
 
 #define PORT_LOW 2000
 #define PORT_HIGH 65535
+#define SIZE_OF_BUFFER 100000
 
 // Prototypes.
 void usage();
@@ -27,12 +34,19 @@ void dostuff(int);
 void error(const char *);
 
 int main(int argc, char **argv) {
+	int i;
+	char inBuffer[SIZE_OF_BUFFER];		// Incoming plaintext message storage buffer.
+	int lengthOFplaintext;				// Calculated length of plaintext message.
+	int numCharsSent;					// Number of chars sent with calls to write().
+	char keyBuffer[SIZE_OF_BUFFER];		// A buffer to store the incoming key.
+	int lengthOFkey;					// Calculated length of the key.
+	char encyrptedResponse[SIZE_OF_BUFFER];	// A buffer to store the encrypted ciphertext to be sent to otp_enc client.
 	int socketFD;						// A socket file descriptor for the socket() call.
-	int newSocketFD;					// Another socket file descriptor but for accept() call.
+	int newSocketFD;					// Another socket file descriptor but for upto 5x accept() call.
 	int portNum;						// The communications port that accepts connections (16 bits).
 	socklen_t clientAddressLength;		// Unsigned int type of length of at least 32
 									//   bits used to evaluate the sizeof clientAddress.
-	pid_t pid;
+	pid_t pid;						// Process ID.
 	struct sockaddr_in serverAddress;		// Struct containing the internet address of the server as defined in netinet/in.h.
 	struct sockaddr_in clientAddress;		// Struct containing the internet address of the client that connects.
 
@@ -67,9 +81,10 @@ int main(int argc, char **argv) {
 	On success, a file descriptor for the new socket is returned.
 	On error, -1 is returned, and errno is set appropriately.  [2] */
 	socketFD = socket(AF_INET, SOCK_STREAM, 0);
+
 	// Check socketFD was instantiated without errors.
 	if (socketFD < 0) {
-		error("ERROR opening socket");
+		error("otp_enc_d ERROR opening socket connection.\nPlease try again.");
 	}
 
 	// Sets all characters of serverAddress var to '\0' (similar to memset). Note the cast.
@@ -77,7 +92,7 @@ int main(int argc, char **argv) {
 
 	// Initialize the serverAddress sin_ struct members.
 	serverAddress.sin_family = AF_INET;		// Address Family = Internet IPv4.
-	serverAddress.sin_addr.s_addr = INADDR_ANY;	// Set the IP address of the host. INADDR_ANY returns host machines returns this address.
+	serverAddress.sin_addr.s_addr = INADDR_ANY;	// Set the IP address of the host. INADDR_ANY returns host machines (this) address.
 	serverAddress.sin_port = htons(portNum);	// Converts portNum in host byte order to portNum in network byte order (Big/Little Endian).
 
 	/* Binds socketFD to the address of the current host and port number on which the server will run.
@@ -86,12 +101,14 @@ int main(int argc, char **argv) {
 		arg_3 => the sizeof the address that is to be bound.
 		returns -1 on error condition. */
 	if (bind(socketFD, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) < 0) {
-		error("ERROR on binding");
+		error("otp_enc_d ERROR on call to bind() ");
 	}
 
-	/* Listen on the socket with a backlog queue size max of 5 (most systems) backlog queue - the number of connections
+	/* Listen on the socket with a maximum size 5 (most systems) backlog queue - the number of connections
 	that can be waiting while the process is handling a particular connection. */
-	listen(socketFD, 5);
+	if(listen(socketFD, 5) == -1) {
+		error("otp_enc_d Error: otp_enc_d busy, please try again.");
+	}
 
 	// Get the sizeof clientAddress.
 	clientAddressLength = sizeof(clientAddress);
@@ -106,19 +123,120 @@ int main(int argc, char **argv) {
 
 		// Error check for call to accept().
 		if (newSocketFD < 0) {
-			error("ERROR on accept");
+			error("otp_enc_d ERROR on call to accept() connection with client.");
 		}
 
 		/* A connection has been established at this point... */
 
+		// Fork the parent process.
 		pid = fork();
-		if (pid < 0)
-			error("ERROR on call to fork() ");
+		// Error check the call to fork().
+		if (pid < 0) {
+			error("otp_enc_d ERROR on call to fork() ");
+		}
 
 		if (pid == 0) {
-			close(socketFD);			// NOT SURE ABOUT THAT...
-			dostuff(newSocketFD);
-			exit(0);					// OR THAT...
+			/* We have a child process on a good port, so we begin communicating with error checking routines. */
+
+			// Set all elements of inBuffer to 0.
+			memset(inBuffer, 0, SIZE_OF_BUFFER);
+
+			// Get the plaintext message from otp_enc.
+			lengthOFplaintext = read(newSocketFD, inBuffer, SIZE_OF_BUFFER);
+
+			// Error check that plaintext message was larger than 0.
+			if (lengthOFplaintext < 1) {
+				error("otp_enc_d Errror: No plaintext message accompanied your request.");
+			}
+
+			/* Check for valid plaintextmessage received character set has been used. 
+			   Note cast to long for each element of inBuffer to avoid the gcc compiler warning. */
+			for(i = 0; i != 0/*< lengthOFplaintext*/; i++) {
+				// If the char is < A and not also a space or the char is > Z... See [4].
+				if( ((long)inBuffer[i] < 65 && (long)inBuffer != 32) || (long)inBuffer[i] > 90 ) {
+					error("otp_enc_d Error: plaintext message contains bad characters! A-Z and \" \" only!\n");
+				}
+			}
+
+			// Return an acknowledgement to client that the plaintext message was received.
+			numCharsSent = write(newSocketFD, "200", 3);
+
+			//Error check return message sent.
+			if (numCharsSent != 3) {
+				error("otp_enc_d Error: sending plaintext message acknowledgement back to client failed!");
+			}
+
+			// Set all elements of keyBuffer to 0.
+			memset(keyBuffer, 0, SIZE_OF_BUFFER);
+
+			// Read the key.
+			lengthOFkey = read(newSocketFD, keyBuffer, SIZE_OF_BUFFER);
+
+			// Error check lengthOFkey for < than the plaintextmessage or == 0 (no key sent).
+			if (lengthOFkey < lengthOFplaintext || lengthOFkey < 1) {
+				error("otp_enc_d Error: while reading key\nKey must be at least as long as plaintext message or no key sent!");
+			}
+
+			/* Check for valid plaintextmessage received character set has been used.
+			   Note cast to long for each element of inBuffer to avoid the gcc compiler warning. */
+			for (i = 0; i < lengthOFkey; i++) {
+				if( ((long)keyBuffer[i] < 65 && (long)keyBuffer != 32) || (long)keyBuffer[i] > 90) {
+					error("otp_enc_d Error: key contains bad characters! A-Z and \" \" only!\n");
+				}
+			}
+
+			/* So we should now have a valid plaintext message and a key for encrypting.
+			   We now do the actual encryption process of the plaintext message and return it. */
+
+			// Set all elements of encyrptedResponse buffer to 0.
+			memset(encyrptedResponse, 0, SIZE_OF_BUFFER);
+
+			for (i = 0; i < lengthOFplaintext; i++) {
+				/* Convert spaces to the 'at' symbol in both key and plaintext
+				   message otherwise our "% 27" call won't work. Could also use '['.  */
+				if (inBuffer[i] == ' ') {
+					inBuffer[i] = '@';
+				}
+				if (keyBuffer[i] == ' ') {
+					keyBuffer[i] = '@';
+				}
+
+				// Cast chars to ints.
+				int tempMessageChar = (int)inBuffer[i];
+				int tempKeyChar = (int)keyBuffer[i];
+
+				// Offset ASCII values by 64 so that range is 0 - 26 for 27 total chars.
+				tempMessageChar -= 64;
+				tempKeyChar -= tempKeyChar;
+
+				// Add corresponding key chars and message chars and modulo the result. [5]
+				int eachCipherChar = (tempMessageChar + tempKeyChar) % 27;
+
+				// Add 64 back so that the ASCII range is the correct 64 - 90, less the ' ' issue.
+				eachCipherChar += 64;
+
+				// Cast each "encrypted" int back to chars into the encryptedResponse buffer.
+				encyrptedResponse[i] = (char)eachCipherChar;
+
+				// Change the 'at' symbols to spaces.
+				if (encyrptedResponse[i] == '@') {
+					encyrptedResponse[i] = ' ';
+				}
+			}
+
+			// Send the encyrpted ciphertext to otp_enc client.
+			numCharsSent = write(newSocketFD, encyrptedResponse, lengthOFplaintext);
+
+			// Error check call to write().
+			if (numCharsSent < lengthOFplaintext) {
+				error("otp_enc_d Error: Call to write() to newSocketFD failed!");
+			}
+
+			// Close sockets.
+			close(newSocketFD);
+			close(socketFD);
+			// Exit the child process!
+			exit(0);
 		}
 		else close(newSocketFD);
 	}// End while.
@@ -126,47 +244,29 @@ int main(int argc, char **argv) {
 	// Close the listener socket.
 	close(socketFD);
 
-	printf("Made it!\n");
 	return 0;
 }
 
+// A usage error message printed to stdout.	[6]
 void usage() {
-	fprintf(stderr, "Error: syntax: otp_enc_d {listening_port_number = 2000 - 65535 inclusive} &\n"
+	fprintf(stderr, "otp_enc_d Error: syntax: otp_enc_d {listening_port_number = 2000 - 65535 inclusive} &\n"
 				 "Note this is a background \"daemon\" process.\n");
 }
 
 
-/******** DOSTUFF() *********************
-There is a separate instance of this function
-for each connection.  It handles all communication
-once a connnection has been established.
-*****************************************/
-void dostuff(int sock) {
-	int n;								// Holder for return values from read() and write() calls.
-	char buffer[256];						// Message buffer that stores chars read from the socket connection.
-	bzero(buffer, 256);
-	n = read(sock, buffer, 255);
-	if (n < 0) {
-		error("ERROR reading from socket");
-	}
-
-	printf("Here is the message: %s\n", buffer);
-
-	// Send a message to the client machine by writing to newSocketFD. 
-	n = write(sock, "I got your message", 18);
-
-	// Error check call to write().
-	if (n < 0) error("ERROR writing to socket");
-}
-
-// Error reporting.
+/* Error reporting. The perror() function produces a message on 
+   stderr describing the last error encountered during a call to
+   a system or library function. [6] */
 void error(const char *msg) {
 	perror(msg);
-	exit(1);
+	exit(2);
 }
 
 /* CITATIONS: Adapted from the following sources:
-[1] http://www.linuxhowtos.org/C_C++/socket.htm
-[2] http://www.linuxhowtos.org/manpages/2/socket.htm
-[3] Lecture slides and CS344-400-F16 forum commentary, Prof. B. Brewster, Oregon State Unviversity.
+[1] Lecture slides and CS344-400-F16 forum commentary, Prof. B. Brewster, Oregon State Unviversity.
+[2] http://www.linuxhowtos.org/C_C++/socket.htm
+[3] http://www.linuxhowtos.org/manpages/2/socket.htm
+[4] http://www.asciitable.com/
+[5] https://en.wikipedia.org/wiki/One-time_pad
+[6] http://stackoverflow.com/questions/12102332/when-should-i-use-perror-and-fprintfstderr
 */

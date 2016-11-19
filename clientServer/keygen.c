@@ -10,7 +10,7 @@
 #include<time.h>
 
 // Define maximum key length as MAX_INT - 1 (for the '/n').
-#define MAX_KEY_LENGTH 2147483646
+#define MAX_KEY_LENGTH 100000
 
 void usage();
 
@@ -39,8 +39,8 @@ int main(int argc, char **argv) {
 			temp = ' ';			// Add ' ' to our 'ALPHA' char range.
 		}
 		else {
-			temp += 'A';			/* Convert "ASCII int" from ??? to uppercase.
-								   'A' to ascii is '65'. See ascii chart [1]. */
+			temp += 65;			/* Convert "ASCII int" from ??? to uppercase.
+								   Char 'A' ASCII to int is '65'.     [1] */
 		}
 		printf("%c", (char)temp);	// Print while casting "ASCII int" to chars. 
 	}
@@ -50,7 +50,7 @@ int main(int argc, char **argv) {
 }
 
 void usage() {// [2]
-	fprintf(stderr, "Error: syntax: keygen {int 1 - 2147483646 inclusive}"
+	fprintf(stderr, "Error: syntax: keygen {int 1 - 100,000 inclusive}"
 				 " > {yourTextFileName}\n");
 }
 
