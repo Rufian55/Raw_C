@@ -1,19 +1,17 @@
 /******************************************************************************
 * Chris Kearns, CS344-400-F16, Proejct 4, kearnsc@oregonstate.edu 2 Dec 2016
-*
 * otp_enc stands for "One Time Pad Encryption (Client)".
-*
 * otp_enc.c is a simple single purpose client that requests and maintains 
 * a connection to the otp_enc_d encryption daemon (only) on the inputted
 * port/socket.  Once connected, otp_enc client sends a pregenerated key (see 
 * also keygen.c) and a plaintext message for encyrption. The encyrpted message
-* is writen to encrypted ciphertext to otp_enc connected process.
-*
-* This is a background "daemon like" program.
-* Usage is: otp_enc_d {int listening_port_number} &
-*    where int listenting_port_number is an int from 2000 to 65535 inclusive.
-* Compile with the "compileall" bash script or individually:
-* gcc otp_enc_d.c -o otp_enc_d -g -Wall	   Socket code adapated from [1][2][3]
+* is written to a user specified file and output to the screen.
+* This program will exit after succesful completion of encrytpted message so
+* but can be called again immediately for additional work.
+* Usage is: otp_enc {plaintext_message_file} {key_file} {port_number}
+*  where port_number must match the port the otp_enc_d daemon was started on.
+* Compile with the provided "compileall" bash script or individually:
+* gcc otp_enc.c -o otp_enc -g -Wall	   Socket code adapated from [1][2][3]
 ******************************************************************************/
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -28,161 +26,174 @@
 #include <unistd.h>
 
 #define BUFFER_SIZE 100000
+#define TEST 1
 
 int main(int argc, char** argv) {
-	char buffer1[BUFFER_SIZE];
-	char buffer2[BUFFER_SIZE];
-	char buffer3[1];
-	int fd;
+	char inBuffer[BUFFER_SIZE];		// The plaintext message storage buffer and the returned encypted message.
+	int lengthOFplaintext;			// Calculated length of plaintext message string
+	char keyBuffer[BUFFER_SIZE];		// The key file storage buffer.
+	int lengthOFkey;				// Calculated length of key file string.
+	char amBuffer[3];				// The acknowledgement message (from otp_enc_d) storage buffer.
+	int FD;						// General purpose File Descriptor.
 	int i;
-	int keyLength;
-	int numReceived;
-	int numSent;
-	int plaintextLength;
-	int port;
-	int sockfd;
+	int numCharsRecvd;				// The length of the filestream, in chars, received from otp_enc_d. 
+	int numCharsSent;				// Number of chars sent through the socket connection.
+	int portNum;					// The user defined communcations port number.
+	int socketFD;					// The communications socket.
+	struct sockaddr_in serverAddress;	// Struct containing the internet address of the server as defined in netinet/in.h.
+	struct hostent *server;			// Pointer to struct type hostent as defined in the header file netdb.h
 
-	struct sockaddr_in serv_addr;
-	struct hostent *server;
-
-	// make sure there are enough args
+	// Error check for correct number of arguments.
 	if (argc < 4) {
-		printf("Usage: otp_enc plaintext key port\n");
+		printf("Usage Error: otp_enc {plaintext_message_file} {key_file} {port_number}\n");
 		exit(1);
 	}
 
-	// validate port number
-	sscanf(argv[3], "%d", &port);
-	if (port < 0 || port > 65535) {
-		printf("otp_enc: invalid port\n");
-		exit(2);
-	}
-
-	// open plaintext for reading
-	fd = open(argv[1], O_RDONLY);
-
-	// if unable to read file, display error message
-	if (fd < 0) {
-		printf("Error: cannot open plaintext file %s\n", argv[1]);
+	// Test for acceptable port number range.
+	sscanf(argv[3], "%d", &portNum);
+	if (portNum < 2000 || portNum > 65535) {
+		printf("otp_enc Error: Invalid port number - range is 2000 - 65535 inclusive!\n");
 		exit(1);
 	}
 
-	// read contents of plaintext & keep track of # of bytes read
-	plaintextLength = read(fd, buffer1, BUFFER_SIZE);
+	// Open plaintext message file for reading.
+	FD = open(argv[1], O_RDONLY);
 
-	// validate contents of plaintext
+	// Error test call to open().
+	if (FD < 0) {
+		printf("otp_enc Error: Cannot open file %s or file is empty!\n", argv[1]);
+		exit(1);
+	}
+
+	// Read contents of plaintext message file.
+	lengthOFplaintext = read(FD, inBuffer, BUFFER_SIZE);
+
+	// Validate contents of plaintext
 	for (i = 0; i != 0 /*< plaintextLength - 1*/; i++) {
-		if ((int)buffer1[i] > 90 || ((int)buffer1[i] < 65 && (int)buffer1[i] != 32)) {
-			printf("otp_enc error: plaintext contains bad characters\n");
+		if ((int)inBuffer[i] > 90 || ((int)inBuffer[i] < 65 && (int)inBuffer[i] != 32)) {
+			printf("otp_enc Error: plaintext message string contains bad characters!\n");
 			exit(1);
 		}
 	}
 
-	// close plaintext
-	close(fd);
+	// Close plaintext message file.
+	close(FD);
 
-	// open key for reading
-	fd = open(argv[2], O_RDONLY);
+	// Open key file for reading.
+	FD = open(argv[2], O_RDONLY);
 
-	// if unable to read file, display error message
-	if (fd < 0) {
-		printf("Error: cannot open key file %s\n", argv[2]);
+	// Error check call to read() of key file.
+	if (FD < 0) {
+		printf("otp_enc Error: Cannot open key file %s !\n", argv[2]);
 		exit(1);
 	}
 
-	// read contents of key & keep track of # of bytes read
-	keyLength = read(fd, buffer2, BUFFER_SIZE);
+	// Read contents of key file.
+	lengthOFkey = read(FD, keyBuffer, BUFFER_SIZE);
 
-	// validate contents of key
-	for (i = 0; i < keyLength - 1; i++) {
-		if ((int)buffer2[i] > 90 || ((int)buffer2[i] < 65 && (int)buffer2[i] != 32)) {
-			printf("otp_enc error: key contains bad characters\n");
+	// Test for bad characters in key file.
+	for (i = 0; i < lengthOFkey - 1; i++) {
+		if ((int)keyBuffer[i] > 90 || ((int)keyBuffer[i] < 65 && (int)keyBuffer[i] != 32)) {
+			printf("otp_enc Error: key file contains bad characters!\n");
 			exit(1);
 		}
 	}
 
-	// close key
-	close(fd);
+	// Close key file.
+	close(FD);
 
-	// compare length of plaintext to that of key
-	if (keyLength < plaintextLength) {
-		printf("Error: key '%s' is too short\n", argv[2]);
+	// Test length of strings contained in plaintext message file and key file.
+	if (lengthOFkey < lengthOFplaintext) {
+		printf("otp_enc Error: key file '%s' is too short!\n", argv[2]);
 	}
 
-	// create socket
-	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (sockfd < 0) {
-		printf("Error: could not contact otp_enc_d on port %d\n", port);
-		exit(2);
+	// Create communications socket for otp_enc.
+	socketFD = socket(AF_INET, SOCK_STREAM, 0);
+	// Error test call to socket().
+	if (socketFD < 0) {
+		printf("otp_enc Error: Call to socket() failed!\n");
+		exit(1);
 	}
 
-	// zero out the IP address memory space
-	memset(&serv_addr, '\0', sizeof(serv_addr));
+	// Clear all elements of struct serv_addr_in serv_addr.
+	memset(&serverAddress, '\0', sizeof(serverAddress));
 
+	// Set struct hostent server to localhost.
 	server = gethostbyname("localhost");
+
+	// Test call to gethostbyname().
 	if (server == NULL) {
-		printf("Error: could not connect to otp_enc_d\n");
-		exit(2);
+		printf("otp_enc Error: Call to gethostname() failed!\n");
+		exit(1);
 	}
 
-	serv_addr.sin_family = AF_INET;
+	// Initialize the serverAddress sin_ struct members.
+	serverAddress.sin_family = AF_INET;		// Address Family = Internet IPv4.
+	serverAddress.sin_port = htons(portNum);	/* Converts portNum in host byte order to portNum in
+									     network byte order (Big/Little Endian). */
 
-	bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr,
-		server->h_length);
-
-	serv_addr.sin_port = htons(port);
-
-	// connect to otp_enc_d
-	if (connect(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-		printf("Error: could not connect to otp_enc_d on port %d\n", port);
-		exit(2);
+	// Copies n bytes from src to dest [ void bcopy(void *src, void *dest, size_t n); ] note casts.
+	bcopy((char *)server->h_addr, (char *)&serverAddress.sin_addr.s_addr, server->h_length);
+	
+	// Connect to otp_enc_d
+	if (connect(socketFD, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) < 0) {
+		printf("otp_enc Error: Could not connect to otp_enc_d on port %d\n", portNum);
+		exit(1);
 	}
 
-	// send plaintext to otp_enc_d
-	numSent = write(sockfd, buffer1, plaintextLength - 1);
-	if (numSent < plaintextLength - 1) {
-		printf("Error: could not send plaintext to otp_enc_d on port %d\n", port);
-		exit(2);
+	// Send plaintext message to otp_enc_d daemon.
+	numCharsSent = write(socketFD, inBuffer, lengthOFplaintext - 1);
+
+	// Error check call to write().
+	if (numCharsSent < lengthOFplaintext - 1) {
+		printf("otp_enc Error: Could not send plaintext message to otp_enc_d on port %d.\n", portNum);
+		exit(1);
 	}
 
-	memset(buffer3, 0, 1);
+	// Set all elements of amBuffer to 0.
+	memset(amBuffer, 0, 3);
 
-	// get acknowledgement from server
-	numReceived = read(sockfd, buffer3, 1);
-	if (numReceived < 0) {
-		printf("Error receiving acknowledgement from otp_enc_d\n");
-		exit(2);
+	// Get acknowledgement message from server.
+	numCharsRecvd = read(socketFD, amBuffer, 3);
+	if (numCharsRecvd != 3) {
+		printf("otp_enc Error: call to read() acknowledgement message from otp_enc_d failed!\n");
+		exit(1);
 	}
 
-	// send key to otp_enc_d
-	numSent = write(sockfd, buffer2, keyLength - 1);
-	if (numSent < keyLength - 1) {
-		printf("Error: could not send key to otp_enc_d on port %d\n", port);
-		exit(2);
+	if (TEST) {
+		printf("otp_enc says numCharsRead into amBuffer = %d amBuffer = %s\n", numCharsRecvd, amBuffer);
 	}
 
-	// zero out buffer
-	memset(buffer1, 0, BUFFER_SIZE);
+	// Send key file to otp_enc_d
+	numCharsSent = write(socketFD, keyBuffer, lengthOFkey - 1);
 
-	do {
-		// receive ciphertext from otp_enc_d
-		numReceived = read(sockfd, buffer1, plaintextLength - 1);
-	} while (numReceived > 0);
-
-	if (numReceived < 0) {
-		printf("Error receiving ciphertext from otp_enc_d\n");
-		exit(2);
+	// Error check call to write().
+	if (numCharsSent < lengthOFkey - 1) {
+		printf("otp_enc Error: Could not send key file to otp_enc_d on port %d.\n", portNum);
+		exit(1);
 	}
 
-	// output ciphertext to stdout
-	for (i = 0; i < plaintextLength - 1; i++) {
-		printf("%c", buffer1[i]);
+	// Set all elements of inBuffer to 0, clearing the plaintext message.
+	memset(inBuffer, 0, BUFFER_SIZE);
+
+	// Receive ciphertext from otp_enc_d.
+	numCharsRecvd = read(socketFD, inBuffer, lengthOFplaintext - 1);
+
+	// Error check call to read().
+	if (numCharsRecvd < 1) {
+		printf("otp_enc Error: Call to read() for receiving ciphertext message from otp_enc_d failed!\n");
+		exit(1);
 	}
 
-	// add newline to ciphertext ouput
+	// Print to stdout ciphertext message received.
+	for (i = 0; i < numCharsRecvd - 1; i++) {
+		printf("%c", inBuffer[i]);
+	}
+
+	// Add newline to ciphertext ouput stream.
 	printf("\n");
 
-	// close socket
-	close(sockfd);
+	// Close socket.
+	close(socketFD);
 	return 0;
 }

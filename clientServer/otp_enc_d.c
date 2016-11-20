@@ -8,10 +8,10 @@
 * accepts a key (see also keygen.c) and a plaintext message. These are used to 
 * generate and write back an encrypted ciphertext to otp_enc connected process. 
 *
-* This is a background "daemon like" program.
+* This is a background "daemon like" program. Kill it with "kill -9 <pid>".
 * Usage is: otp_enc_d {int listening_port_number} &
 *    where int listenting_port_number is an int from 2000 to 65535 inclusive.
-* Compile with the "compileall" bash script or individually:
+* Compile with the provided "compileall" bash script or individually:
 * gcc otp_enc_d.c -o otp_enc_d -g -Wall	   Socket code adapated from [1][2][3]
 ******************************************************************************/
 #include <fcntl.h>
@@ -21,12 +21,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <sys/types.h> 
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #define PORT_LOW 2000
 #define PORT_HIGH 65535
 #define SIZE_OF_BUFFER 100000
+#define TEST 0
 
 // Prototypes.
 void usage();
@@ -50,7 +52,7 @@ int main(int argc, char **argv) {
 	struct sockaddr_in serverAddress;		// Struct containing the internet address of the server as defined in netinet/in.h.
 	struct sockaddr_in clientAddress;		// Struct containing the internet address of the client that connects.
 
-/*   The below struct is defined for you in the netinet/in.h library and noted here for edification.
+/*   The below struct is defined for you in the netinet/in.h library and noted here for "future me" purposes only.
 	struct sockaddr_in {
 	short sin_family;					// Must be AF_INET.
 	u_short sin_port;					// Port number in network byte order.  See below.
@@ -67,7 +69,7 @@ int main(int argc, char **argv) {
 
 	// PortNum assigned command line argument after string of digits to int conversion.
 	portNum = atoi(argv[1]);
-	// Check for proper range (arbitraily set by author).
+	// Check for proper range (arbitrarily set by author).
 	if (portNum < PORT_LOW || portNum > PORT_HIGH) {
 		usage();
 		exit(1);
@@ -149,14 +151,25 @@ int main(int argc, char **argv) {
 				error("otp_enc_d Errror: No plaintext message accompanied your request.");
 			}
 
+			if (TEST) {
+				printf("otp_enc_d (1) says plaintext message received = %s\n", inBuffer);
+				printf("otp_enc_d (1) says plaintext string length = %d\n", lengthOFplaintext);
+			}
+
 			/* Check for valid plaintextmessage received character set has been used. 
 			   Note cast to long for each element of inBuffer to avoid the gcc compiler warning. */
-			for(i = 0; i != 0/*< lengthOFplaintext*/; i++) {
+			for(i = 0; i < lengthOFplaintext - 1; i++) {
 				// If the char is < A and not also a space or the char is > Z... See [4].
-				if( ((long)inBuffer[i] < 65 && (long)inBuffer != 32) || (long)inBuffer[i] > 90 ) {
+				if( ((long)inBuffer[i] < 65 && (long)inBuffer[i] != 32) || (long)inBuffer[i] > 90 ) {
+					printf("Bad Char = %c\n", inBuffer[i]);
 					error("otp_enc_d Error: plaintext message contains bad characters! A-Z and \" \" only!\n");
 				}
 			}
+
+			if (TEST) {
+				printf("otp_enc_d (2) says plaintext message received = %s\n", inBuffer);
+			}
+
 
 			// Return an acknowledgement to client that the plaintext message was received.
 			numCharsSent = write(newSocketFD, "200", 3);
@@ -180,9 +193,13 @@ int main(int argc, char **argv) {
 			/* Check for valid plaintextmessage received character set has been used.
 			   Note cast to long for each element of inBuffer to avoid the gcc compiler warning. */
 			for (i = 0; i < lengthOFkey; i++) {
-				if( ((long)keyBuffer[i] < 65 && (long)keyBuffer != 32) || (long)keyBuffer[i] > 90) {
+				if( ((long)keyBuffer[i] < 65 && (long)keyBuffer[i] != 32) || (long)keyBuffer[i] > 90) {
 					error("otp_enc_d Error: key contains bad characters! A-Z and \" \" only!\n");
 				}
+			}
+
+			if (TEST) {
+				printf("otp_enc_d says keyString = %s\n", keyBuffer);
 			}
 
 			/* So we should now have a valid plaintext message and a key for encrypting.
@@ -191,7 +208,8 @@ int main(int argc, char **argv) {
 			// Set all elements of encyrptedResponse buffer to 0.
 			memset(encyrptedResponse, 0, SIZE_OF_BUFFER);
 
-			for (i = 0; i < lengthOFplaintext; i++) {
+			// Encrypt the plaintext message.
+			for (i = 0; i < lengthOFplaintext - 1; i++) {
 				/* Convert spaces to the 'at' symbol in both key and plaintext
 				   message otherwise our "% 27" call won't work. Could also use '['.  */
 				if (inBuffer[i] == ' ') {
@@ -207,7 +225,7 @@ int main(int argc, char **argv) {
 
 				// Offset ASCII values by 64 so that range is 0 - 26 for 27 total chars.
 				tempMessageChar -= 64;
-				tempKeyChar -= tempKeyChar;
+				tempKeyChar -= 64;
 
 				// Add corresponding key chars and message chars and modulo the result. [5]
 				int eachCipherChar = (tempMessageChar + tempKeyChar) % 27;
@@ -232,16 +250,26 @@ int main(int argc, char **argv) {
 				error("otp_enc_d Error: Call to write() to newSocketFD failed!");
 			}
 
+			if (TEST) {
+				printf("otp_end_d says encrypted response = %s\n", encyrptedResponse);
+			}
+
 			// Close sockets.
 			close(newSocketFD);
 			close(socketFD);
 			// Exit the child process!
 			exit(0);
 		}
-		else close(newSocketFD);
+		else {
+			close(newSocketFD);
+		}
+
+		// Avoid zombied process after otp_enc call.
+		waitpid(pid, NULL, 0);
+
 	}// End while.
 
-	// Close the listener socket.
+	// Close the listener socket, though we never get here...
 	close(socketFD);
 
 	return 0;
@@ -259,7 +287,7 @@ void usage() {
    a system or library function. [6] */
 void error(const char *msg) {
 	perror(msg);
-	exit(2);
+	exit(1);
 }
 
 /* CITATIONS: Adapted from the following sources:
