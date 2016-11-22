@@ -27,28 +27,27 @@
 
 #define PORT_LOW 2000
 #define PORT_HIGH 65535
-#define SIZE_OF_BUFFER 100000
 #define TEST 0
 
 // Prototypes.
 void usage();
-void dostuff(int);
-void error(const char *);
 
 int main(int argc, char **argv) {
 	int i;
-	char inBuffer[SIZE_OF_BUFFER];		// Incoming plaintext message storage buffer.
-	int lengthOFplaintext;				// Calculated length of plaintext message.
-	int numCharsSent;					// Number of chars sent with calls to write().
-	char keyBuffer[SIZE_OF_BUFFER];		// A buffer to store the incoming key.
-	int lengthOFkey;					// Calculated length of the key.
-	char encyrptedResponse[SIZE_OF_BUFFER];	// A buffer to store the encrypted ciphertext to be sent to otp_enc client.
+	int err;							// General purpose error testing var.
+	char *msgBuffer;					// Pointer to incoming plaintext messages storage buffer.
+	size_t lengthOfMsg = 0;				// Calculated length of plaintext message.
+	char *keyBuffer;					// Pointer to incoming key storage buffer.
+	size_t lengthOfKey = 0;				// Calculated length of the key.
+	char *encyrptedResponse;				// Pointer to the encyrpted response buffer prior to sending to otp_enc client.
 	int socketFD;						// A socket file descriptor for the socket() call.
 	int newSocketFD;					// Another socket file descriptor but for upto 5x accept() call.
 	int portNum;						// The communications port that accepts connections (16 bits).
-	socklen_t clientAddressLength;		// Unsigned int type of length of at least 32
-									//   bits used to evaluate the sizeof clientAddress.
+	socklen_t clientAddressLength;		// (Unsigned int) type, at least 32 bits, used to evaluate sizeof clientAddress.
 	pid_t pid;						// Process ID.
+	char synBuffer[6];					// Storage buffer for cleint password read.
+	char password[6] = "j5K(e";			// Server password.
+	char ack[6] = "x#sB2";				// Returned to client on succesful password / synBuffer comparison.
 	struct sockaddr_in serverAddress;		// Struct containing the internet address of the server as defined in netinet/in.h.
 	struct sockaddr_in clientAddress;		// Struct containing the internet address of the client that connects.
 
@@ -145,62 +144,136 @@ int main(int argc, char **argv) {
 		if (pid == 0) {
 			/* We have a child process on a good port, so we begin communicating with error checking routines. */
 
-			// Set all elements of inBuffer to 0.
-			memset(inBuffer, 0, SIZE_OF_BUFFER);
+			// Initialize synBuffer c-string.
+			memset(synBuffer, '\0', 6);
 
+			// Read handshake SYN value.
+			err = read(newSocketFD, synBuffer, 5);
+
+			// Test err for good read!
+			if (err != 5) {
+				fprintf(stderr, "otp_enc_d Error: Initial handshake failed!");
+			}
+
+			if (TEST) {
+				printf("synBuffer = %s\n", synBuffer);
+				printf("ack = %s\n", ack);
+				printf("password = %s\n", password);
+			}
+
+			if (strncmp(synBuffer, password, 5) == 0) {
+				err = write(newSocketFD, ack, 5);
+				if (err != 5) {
+					fprintf(stderr, "otp_enc_d Error: call to write() ack failed!\n");
+				}
+			}
+			else {
+				err = write(newSocketFD, password, 5);
+				if (err != 5) {
+					fprintf(stderr, "otp_enc_d Error: call to write() (bounce back) password failed!\n");
+				}
+			}
+
+			// Read in the lengthOfMsg from otp_enc.
+			err = read(newSocketFD, &lengthOfMsg, sizeof(lengthOfMsg));
+
+			if (TEST) {
+				printf("otp_enc_d err for read convertedLOM = %d\n", err);
+			}
+
+			// Error test call to read().
+			if (err < 1) {
+				fprintf(stderr, "otp_enc_d Error: call to read lengthOfMsg from otp_enc failed!\n");
+				exit(EXIT_FAILURE);
+			}
+
+			// Convert to network Endianess.		[7]
+			lengthOfMsg = ntohl(lengthOfMsg);
+
+
+			// Read in the lengthOfKey from otp_enc.
+			err = read(newSocketFD, &lengthOfKey, sizeof(lengthOfKey));
+
+			if (TEST) {
+				printf("otp_enc_d err for read convertedLOK = %d\n", err);
+			}
+
+			// Error test call to read().
+			if (err < 1) {
+				fprintf(stderr, "otp_enc_d Error: call to read lengthOfMsg from otp_enc failed!\n");
+				exit(EXIT_FAILURE);
+			}
+
+			// Convert to network Endianess.		[7]
+			lengthOfKey = ntohl(lengthOfKey);
+
+			if (TEST) {
+				printf("lengthOfMsg = %zu\n", lengthOfMsg);
+				printf("lengthOfKey = %zu\n", lengthOfKey);
+			}
+
+			// Error check lengthOfKey for < than lengthOfMsg.
+			if (lengthOfKey < lengthOfMsg) {
+				fprintf(stderr, "otp_enc_d Error: while reading key\nKey must be at least as long as plaintext message or no key sent!\n");
+				exit(EXIT_FAILURE);
+			}
+
+			/* Get the plaintext message */
+
+			// Allocate memory for msgBuffer.
+			msgBuffer = malloc(lengthOfMsg * sizeof(char));
+
+			// Error check call to malloc().
+			if (msgBuffer == NULL) {
+				fprintf(stderr, "otp_enc_d Error: call to malloc() failed!\n");
+				exit(EXIT_FAILURE);
+			}
+			
 			// Get the plaintext message from otp_enc.
-			lengthOFplaintext = read(newSocketFD, inBuffer, SIZE_OF_BUFFER);
+			err = read(newSocketFD, msgBuffer, lengthOfMsg);
 
 			// Error check that plaintext message was larger than 0.
-			if (lengthOFplaintext < 1) {
-				fprintf(stderr, "otp_enc_d Errror: No plaintext message accompanied your request.");
+			if (err < 1) {
+				fprintf(stderr, "otp_enc_d Errror: No plaintext message accompanied your request.\n");
 				exit(EXIT_FAILURE);
 			}
 
 			if (TEST) {
-				fprintf(stdout, "otp_enc_d (1) says plaintext message received = %s\n", inBuffer);
-				fprintf(stdout, "otp_enc_d (1) says plaintext string length = %d\n", lengthOFplaintext);
+				fprintf(stdout, "otp_enc_d (1) says plaintext message received = %s\n", msgBuffer);
+				fprintf(stdout, "otp_enc_d (1) says plaintext string length = %zu\n", lengthOfMsg);
 			}
 
 			/* Check for valid plaintextmessage received character set has been used. 
 			   Note cast to long for each element of inBuffer to avoid the gcc compiler warning. */
-			for(i = 0; i < lengthOFplaintext - 1; i++) {
+			for(i = 0; i < lengthOfMsg; i++) {
 				// If the char is < A and not also a space or the char is > Z... See [4].
-				if( ((long)inBuffer[i] < 65 && (long)inBuffer[i] != 32) || (long)inBuffer[i] > 90 ) {
+				if( ((long)msgBuffer[i] < 65 && (long)msgBuffer[i] != 32) || (long)msgBuffer[i] > 90 ) {
 					fprintf(stderr, "otp_enc_d Error: plaintext message contains bad characters! A-Z and \" \" only!\n");
 					exit(EXIT_FAILURE);
 				}
 			}
 
-			if (TEST) {
-				fprintf(stdout, "otp_enc_d (2) says plaintext message received = %s\n", inBuffer);
-			}
+			/* Get the key */
 
+			// Allocate memory for the key storage buffer.
+			keyBuffer = malloc(lengthOfKey * sizeof(char));
 
-			// Return an acknowledgement to client that the plaintext message was received.
-			numCharsSent = write(newSocketFD, "200", 3);
-
-			//Error check return message sent.
-			if (numCharsSent != 3) {
-				fprintf(stderr, "otp_enc_d Error: sending plaintext message acknowledgement back to client failed!");
+			if (keyBuffer == NULL) {
+				fprintf(stderr, "otp_enc_d Error: call to malloc() failed!\n");
 				exit(EXIT_FAILURE);
 			}
 
-			// Set all elements of keyBuffer to 0.
-			memset(keyBuffer, 0, SIZE_OF_BUFFER);
-
 			// Read the key.
-			lengthOFkey = read(newSocketFD, keyBuffer, SIZE_OF_BUFFER);
+			err = read(newSocketFD, keyBuffer, lengthOfKey);
 
-			// Error check lengthOFkey for < than the plaintextmessage or == 0 (no key sent).
-			if (lengthOFkey < lengthOFplaintext || lengthOFkey < 1) {
-				fprintf(stderr, "otp_enc_d Error: while reading key\nKey must be at least as long as plaintext message or no key sent!");
+			if (err < lengthOfKey) {
+				fprintf(stderr, "otp_enc_d Error: call to read() lengthOfKey from otp_enc failed!\n");
 				exit(EXIT_FAILURE);
 			}
 
 			/* Check for valid plaintextmessage received character set has been used.
 			   Note cast to long for each element of inBuffer to avoid the gcc compiler warning. */
-			for (i = 0; i < lengthOFkey; i++) {
+			for (i = 0; i < lengthOfKey; i++) {
 				if( ((long)keyBuffer[i] < 65 && (long)keyBuffer[i] != 32) || (long)keyBuffer[i] > 90) {
 					fprintf(stderr, "otp_enc_d Error: key contains bad characters! A-Z and \" \" only!\n");
 					exit(EXIT_FAILURE);
@@ -214,22 +287,27 @@ int main(int argc, char **argv) {
 			/* So we should now have a valid plaintext message and a key for encrypting.
 			   We now do the actual encryption process of the plaintext message and return it. */
 
-			// Set all elements of encyrptedResponse buffer to 0.
-			memset(encyrptedResponse, 0, SIZE_OF_BUFFER);
+			// Allocate memeory for the encyrptedResponse buffer.
+			encyrptedResponse = malloc(lengthOfMsg * sizeof(char));
+
+			if (encyrptedResponse == NULL) {
+				fprintf(stderr, "otp_enc_d Error: call to malloc() failed!\n");
+				exit(EXIT_FAILURE);
+			}
 
 			// Encrypt the plaintext message.
-			for (i = 0; i < lengthOFplaintext - 1; i++) {
+			for (i = 0; i < lengthOfMsg; i++) {
 				/* Convert spaces to the 'at' symbol in both key and plaintext
 				   message otherwise our "% 27" call won't work. Could also use '['.  */
-				if (inBuffer[i] == ' ') {
-					inBuffer[i] = '@';
+				if (msgBuffer[i] == ' ') {
+					msgBuffer[i] = '@';
 				}
 				if (keyBuffer[i] == ' ') {
 					keyBuffer[i] = '@';
 				}
 
 				// Cast chars to ints.
-				int tempMessageChar = (int)inBuffer[i];
+				int tempMessageChar = (int)msgBuffer[i];
 				int tempKeyChar = (int)keyBuffer[i];
 
 				// Offset ASCII values by 64 so that range is 0 - 26 for 27 total chars.
@@ -252,10 +330,10 @@ int main(int argc, char **argv) {
 			}
 
 			// Send the encyrpted ciphertext to otp_enc client.
-			numCharsSent = write(newSocketFD, encyrptedResponse, lengthOFplaintext);
+			err = write(newSocketFD, encyrptedResponse, lengthOfMsg);
 
 			// Error check call to write().
-			if (numCharsSent < lengthOFplaintext) {
+			if (err < lengthOfMsg) {
 				fprintf(stderr, "otp_enc_d Error: Call to write() to newSocketFD failed!");
 				exit(EXIT_FAILURE);
 			}
@@ -266,7 +344,7 @@ int main(int argc, char **argv) {
 
 			// Close sockets.
 			close(newSocketFD);
-			close(socketFD);
+
 			// Exit the child process!
 			exit(0);
 		}
@@ -281,7 +359,6 @@ int main(int argc, char **argv) {
 
 	// Close the listener socket, though we never get here...
 	close(socketFD);
-
 	return 0;
 }
 
@@ -299,4 +376,5 @@ void usage() {
 [4] http://www.asciitable.com/
 [5] https://en.wikipedia.org/wiki/One-time_pad
 [6] http://stackoverflow.com/questions/12102332/when-should-i-use-perror-and-fprintfstderr
+[7] https://linux.die.net/man/3/ntohl
 */

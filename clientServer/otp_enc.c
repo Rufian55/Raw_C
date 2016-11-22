@@ -25,23 +25,27 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define BUFFER_SIZE 100000
 #define TEST 0
 
 int main(int argc, char** argv) {
-	char inBuffer[BUFFER_SIZE];		// The plaintext message storage buffer and the returned encypted message.
-	int lengthOFplaintext;			// Calculated length of plaintext message string
-	char keyBuffer[BUFFER_SIZE];		// The key file storage buffer.
-	int lengthOFkey;				// Calculated length of key file string.
-	char amBuffer[3];				// The acknowledgement message (from otp_enc_d) storage buffer.
+	int err;						// General purpose error testing int.
 	int FD;						// General purpose File Descriptor.
-	int i;
-	int numCharsRecvd;				// The length of the filestream, in chars, received from otp_enc_d. 
-	int numCharsSent;				// Number of chars sent through the socket connection.
+	int i;						// The ubiquitous looping variable.
 	int portNum;					// The user defined communcations port number.
 	int socketFD;					// The communications socket.
+	long lengthOfMsg;				// Calculated length of plaintext message - range unknown, so type long.
+	size_t convertedLOM;			// lengthOfMsg converted via htonl().
+	long lengthOfKey;				// Calculated length of key - range unknown, so type long.
+	size_t convertedLOK;			// lengthOfKey converted via htonl().		
+	struct stat buffer;				// Needed for calls to stat when determining file size. [1]
 	struct sockaddr_in serverAddress;	// Struct containing the internet address of the server as defined in netinet/in.h.
 	struct hostent *server;			// Pointer to struct type hostent as defined in the header file netdb.h
+	char *plaintextMsg;				// Pointer to plaintext message storage buffer.
+	char *key;					// Pointer to key storage buffer.
+	char *cipherText;				// Pointer to otp_enc_d returned cipherText message storage buffer.
+	char syn[6] = "j5K(e";			// Initial Handshake password, 5 chars and '\0'.
+	char synAck[6] = "x#sB2";		// Expected Handshake Acnowlegment returned from Server, 10 chars and '\0'.
+	char ack[6];					// ACK buffer to store the handshake message acknowledgement from server. 
 
 	// Error check for correct number of arguments.
 	if (argc < 4) {
@@ -56,22 +60,63 @@ int main(int argc, char** argv) {
 		exit(EXIT_FAILURE);
 	}
 
+	if (TEST) {
+		fprintf(stdout, "Port number = %d.\n", portNum);
+	}
+
+	/* READ PLAINTEXT MESSAGE FILE */
+
+	// Determine length of message while still in plaintext message file!
+	err = stat(argv[1], &buffer);
+
+	if (err == -1) {
+		fprintf(stderr, "otp_enc Error: call to stat (1) failed!\n");
+		exit(EXIT_FAILURE);
+	}
+
+	// Assign length of plaintext message and drop the newlines.
+	lengthOfMsg = buffer.st_size - 1;
+
+	if (TEST) {
+		fprintf(stdout, "Var lengthOfMsg = %ld.\n", lengthOfMsg);
+	}
+
+	// Allocate memory for the plaintext message to be read in.
+	plaintextMsg = malloc(lengthOfMsg * sizeof(char));
+
+	// Error test call to malloc().
+	if (plaintextMsg == NULL) {
+		fprintf(stderr, "Memory Allocation Failure 1.\n");
+		exit(EXIT_FAILURE);
+	}
+
 	// Open plaintext message file for reading.
 	FD = open(argv[1], O_RDONLY);
 
-	// Error test call to open().
-	if (FD < 0) {
-		fprintf(stderr, "otp_enc Error: Cannot open file %s or file is empty!\n", argv[1]);
+	// Error test call to open() FD.
+	if (FD < 1) {
+		fprintf(stderr, "otp_enc Error: Cannot open file %s.\n", argv[1]);
 		exit(EXIT_FAILURE);
 	}
 
 	// Read contents of plaintext message file.
-	lengthOFplaintext = read(FD, inBuffer, BUFFER_SIZE);
+	err = read(FD, plaintextMsg, lengthOfMsg);
 
-	// Validate contents of plaintext
-	for (i = 0; i != 0 /*< plaintextLength - 1*/; i++) {
-		if ((int)inBuffer[i] > 90 || ((int)inBuffer[i] < 65 && (int)inBuffer[i] != 32)) {
-			fprintf(stderr, "otp_enc Error: plaintext message string contains bad characters!\n");
+	// Error test call to read(). Picks up fialure (-1) and empty file (0).
+	if (err < 0) {
+		fprintf(stderr, "otp_enc Error: reading plaintext message file failed!");
+		exit(EXIT_FAILURE);
+	}
+
+	if (TEST) {
+		fprintf(stdout, "plaintext message = %s\n", plaintextMsg);
+	}
+
+	// Validate contents of plaintext message.
+	for (i = 0; i < lengthOfMsg; i++) {
+		if ((int)plaintextMsg[i] > 90 || ((int)plaintextMsg[i] < 65 && (int)plaintextMsg[i] != 32)) {
+			printf("Error char = %d END\n", plaintextMsg[i]);
+			fprintf(stderr, "otp_enc Error: plaintextMsg string contains bad characters!\n");
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -79,22 +124,59 @@ int main(int argc, char** argv) {
 	// Close plaintext message file.
 	close(FD);
 
-	// Open key file for reading.
-	FD = open(argv[2], O_RDONLY);
 
-	// Error check call to read() of key file.
-	if (FD < 0) {
-		fprintf(stderr, "otp_enc Error: Cannot open key file %s !\n", argv[2]);
+	/*READ KEY FILE*/
+
+	// Determine length of key while still in plaintext message file!
+	err = stat(argv[2], &buffer);
+
+	if (err == -1) {
+		fprintf(stderr, "otp_enc Error: call to stat (2) failed!\n");
 		exit(EXIT_FAILURE);
 	}
 
-	// Read contents of key file.
-	lengthOFkey = read(FD, keyBuffer, BUFFER_SIZE);
+	// Assign length of key and drop the newline.
+	lengthOfKey = buffer.st_size - 1;
 
-	// Test for bad characters in key file.
-	for (i = 0; i < lengthOFkey - 1; i++) {
-		if ((int)keyBuffer[i] > 90 || ((int)keyBuffer[i] < 65 && (int)keyBuffer[i] != 32)) {
-			fprintf(stderr, "otp_enc Error: key file contains bad characters!\n");
+	if (TEST) {
+		fprintf(stdout, "Var lengthOfKey = %ld.\n", lengthOfKey);
+	}
+
+	// Allocate memory for the key to be read in.
+	key = malloc(lengthOfKey * sizeof(char));
+
+	// Error test call to malloc().
+	if (key == NULL) {
+		fprintf(stderr, "Memory Allocation Failure 2.\n");
+		exit(EXIT_FAILURE);
+	}
+
+	// Open plaintext message file for reading.
+	FD = open(argv[2], O_RDONLY);
+
+	// Error test call to open() FD.
+	if (FD < 0) {
+		fprintf(stderr, "otp_enc Error: Cannot open file %s.\n", argv[2]);
+		exit(EXIT_FAILURE);
+	}
+
+	// Read contents of plaintext message file.
+	err = read(FD, key, lengthOfKey);
+
+	// Error test call to read(). Picks up failure (-1) and empty file (0).
+	if (err < 1) {
+		fprintf(stderr, "otp_enc Error: reading key file failed!");
+		exit(EXIT_FAILURE);
+	}
+
+	if (TEST) {
+		fprintf(stdout, "key string = %s\n", key);
+	}
+
+	// Validate contents of plaintext
+	for (i = 0; i < lengthOfKey; i++) {
+		if ((int)key[i] > 90 || ((int)key[i] < 65 && (int)key[i] != 32)) {
+			fprintf(stderr, "otp_enc Error: key string contains bad characters!\n");
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -102,8 +184,8 @@ int main(int argc, char** argv) {
 	// Close key file.
 	close(FD);
 
-	// Test length of strings contained in plaintext message file and key file.
-	if (lengthOFkey < lengthOFplaintext) {
+	// Test length of strings contained in plaintext string and key string.
+	if (lengthOfKey < lengthOfMsg) {
 		fprintf(stderr, "otp_enc Error: key file '%s' is too short!\n", argv[2]);
 		exit(EXIT_FAILURE);
 	}
@@ -142,59 +224,137 @@ int main(int argc, char** argv) {
 		exit(EXIT_FAILURE);
 	}
 
-	// Send plaintext message to otp_enc_d daemon.
-	numCharsSent = write(socketFD, inBuffer, lengthOFplaintext - 1);
+	// Write SYN handshake message.
+	err = write(socketFD, syn, 5);
 
 	// Error check call to write().
-	if (numCharsSent < lengthOFplaintext - 1) {
+	if(err != 5) {
+		fprintf(stderr, "otp_enc Error: SYN handshake message write failed!\n");
+	}
+
+	// Initialize ack buffer to all '/0'.
+	memset(ack, '\0', 6);
+
+	// Read for acknowledgement from otp_enc_d server.
+	err = read(socketFD, ack, 5);
+	if (err != 5) {
+		fprintf(stderr, "otp_enc Error: call to read ack failed, err = %d.\n", err);
+	}
+
+	if (TEST) {
+		printf("ack = %s\n", ack);
+		printf("synAck = %s\n", synAck);
+	}
+
+	// Compare returned ack and our expected synAck (if succesful, otp_enc_d and otp_enc passwords matched!)
+	if (strncmp(ack, synAck, 5) != 0) {
+		fprintf(stderr, "otp_enc Error: Handshake to server failed - check the port number!\n");
+		exit(EXIT_FAILURE);
+	}
+
+	/* Made it here, so task otp_enc_d to encrypts a string with the key! but first, we have to send the lengthOfMsg and
+	   lengthOfKey long integer vars to otp_enc_d so that program can allocate memory, etc.					[2] */
+
+	// Convert lengthofMsg var to network Endian.
+	convertedLOM = htonl(lengthOfMsg);
+
+	if (TEST) {
+		printf("convertedLOM = %zu\n", convertedLOM);
+	}
+
+	// Send the lengthOfMsg int to otp_enc_d.
+	err = write(socketFD, &convertedLOM, sizeof(convertedLOM));
+
+	if (TEST) {
+		printf("otp_enc err for write convertedLOM = %d\n", err);
+	}
+
+	// Error check call to write().
+	if (err < 1) {
+		fprintf(stderr, "otp_enc Error: Call to write lengthOfMsg to otp_enc_d failed!\n");
+		exit(EXIT_FAILURE);
+	}
+
+
+	// Convert lengthOfMsg var to network Endian.
+	convertedLOK = htonl(lengthOfKey);
+
+	if (TEST) {
+		printf("convertedLOK = %zu\n", convertedLOK);
+	}
+
+	// Send the lengthOfMsg int to otp_enc_d.
+	err = write(socketFD, &convertedLOK, sizeof(convertedLOK));
+
+	if (TEST) {
+		printf("otp_enc err for write convertedLOK = %d\n", err);
+	}
+
+	// Error check call to write().
+	if (err < 1) {
+		fprintf(stderr, "otp_enc Error: Call to write lengthOfKey to otp_enc_d failed!\n");
+		exit(EXIT_FAILURE);
+	}
+
+	// Send plaintext message to otp_enc_d daemon.
+	err = write(socketFD, plaintextMsg, lengthOfMsg);
+
+	// Error check call to write().
+	if (err < lengthOfMsg) {
 		fprintf(stderr, "otp_enc Error: Could not send plaintext message to otp_enc_d on port %d.\n", portNum);
 		exit(EXIT_FAILURE);
 	}
 
-	// Set all elements of amBuffer to 0.
-	memset(amBuffer, 0, 3);
-
-	// Get acknowledgement message from server.
-	numCharsRecvd = read(socketFD, amBuffer, 3);
-	if (numCharsRecvd != 3) {
-		fprintf(stderr, "otp_enc Error: call to read() acknowledgement message from otp_enc_d failed!\n");
-		exit(EXIT_FAILURE);
-	}
-
-	if (TEST) {
-		fprintf(stderr, "otp_enc says numCharsRead into amBuffer = %d amBuffer = %s\n", numCharsRecvd, amBuffer);
-	}
-
 	// Send key file to otp_enc_d
-	numCharsSent = write(socketFD, keyBuffer, lengthOFkey - 1);
+	err = write(socketFD, key, lengthOfKey);
 
 	// Error check call to write().
-	if (numCharsSent < lengthOFkey - 1) {
+	if (err < lengthOfKey) {
 		fprintf(stderr, "otp_enc Error: Could not send key file to otp_enc_d on port %d.\n", portNum);
 		exit(EXIT_FAILURE);
 	}
 
-	// Set all elements of inBuffer to 0, clearing the plaintext message.
-	memset(inBuffer, 0, BUFFER_SIZE);
+	// Allocate memory for otp_enc_d returned cipherText string storage buffer.
+	cipherText = malloc(lengthOfMsg * sizeof(char));
 
-	// Receive ciphertext from otp_enc_d.
-	numCharsRecvd = read(socketFD, inBuffer, lengthOFplaintext - 1);
+	// Check for error condition on call to malloc().
+	if (cipherText == NULL) {
+		fprintf(stderr, "otp_enc Error: Memory allocation failed!\n");
+		exit(EXIT_FAILURE);
+	}
+
+	// Receive ciphertext from otp_enc_d - the assumption being the ciphertext is the same length as the plaintextMsg we sent.
+	err = read(socketFD, cipherText, lengthOfMsg);
 
 	// Error check call to read().
-	if (numCharsRecvd < 1) {
+	if (err < lengthOfMsg) {
 		fprintf(stderr, "otp_enc Error: Call to read() for receiving ciphertext message from otp_enc_d failed!\n");
 		exit(EXIT_FAILURE);
 	}
 
 	// Print to stdout ciphertext message received.
-	for (i = 0; i < numCharsRecvd - 1; i++) {
-		fprintf(stderr, "%c", inBuffer[i]);
+	for (i = 0; i < lengthOfMsg; i++) {
+		fprintf(stdout, "%c", cipherText[i]);
 	}
 
 	// Add newline to ciphertext ouput stream.
-	fprintf(stderr, "\n");
+	fprintf(stdout, "\n");
 
 	// Close socket.
 	close(socketFD);
+
+	// Manage memory.
+	free(plaintextMsg);
+	plaintextMsg = NULL;
+	free(key);
+	key = NULL;
+	free(cipherText);
+	cipherText = NULL;
 	return 0;
 }
+
+/* CITATIONS:
+[1] http://man7.org/linux/man-pages/man2/stat.2.html
+[2] http://stackoverflow.com/questions/9140409/transfer-integer-over-a-socket-in-c
+
+*/
