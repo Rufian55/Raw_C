@@ -26,7 +26,7 @@
 #include <unistd.h>
 
 #define BUFFER_SIZE 100000
-#define TEST 1
+#define TEST 0
 
 int main(int argc, char** argv) {
 	char inBuffer[BUFFER_SIZE];		// The plaintext message storage buffer and the returned encypted message.
@@ -45,15 +45,15 @@ int main(int argc, char** argv) {
 
 	// Error check for correct number of arguments.
 	if (argc < 4) {
-		printf("Usage Error: otp_enc {plaintext_message_file} {key_file} {port_number}\n");
-		exit(1);
+		fprintf(stderr, "Usage Error: otp_enc {plaintext_message_file} {key_file} {port_number}\n");
+		exit(EXIT_FAILURE);
 	}
 
 	// Test for acceptable port number range.
 	sscanf(argv[3], "%d", &portNum);
 	if (portNum < 2000 || portNum > 65535) {
-		printf("otp_enc Error: Invalid port number - range is 2000 - 65535 inclusive!\n");
-		exit(1);
+		fprintf(stderr, "otp_enc Error: Invalid port number - range is 2000 - 65535 inclusive!\n");
+		exit(EXIT_FAILURE);
 	}
 
 	// Open plaintext message file for reading.
@@ -61,8 +61,8 @@ int main(int argc, char** argv) {
 
 	// Error test call to open().
 	if (FD < 0) {
-		printf("otp_enc Error: Cannot open file %s or file is empty!\n", argv[1]);
-		exit(1);
+		fprintf(stderr, "otp_enc Error: Cannot open file %s or file is empty!\n", argv[1]);
+		exit(EXIT_FAILURE);
 	}
 
 	// Read contents of plaintext message file.
@@ -71,8 +71,8 @@ int main(int argc, char** argv) {
 	// Validate contents of plaintext
 	for (i = 0; i != 0 /*< plaintextLength - 1*/; i++) {
 		if ((int)inBuffer[i] > 90 || ((int)inBuffer[i] < 65 && (int)inBuffer[i] != 32)) {
-			printf("otp_enc Error: plaintext message string contains bad characters!\n");
-			exit(1);
+			fprintf(stderr, "otp_enc Error: plaintext message string contains bad characters!\n");
+			exit(EXIT_FAILURE);
 		}
 	}
 
@@ -84,8 +84,8 @@ int main(int argc, char** argv) {
 
 	// Error check call to read() of key file.
 	if (FD < 0) {
-		printf("otp_enc Error: Cannot open key file %s !\n", argv[2]);
-		exit(1);
+		fprintf(stderr, "otp_enc Error: Cannot open key file %s !\n", argv[2]);
+		exit(EXIT_FAILURE);
 	}
 
 	// Read contents of key file.
@@ -94,8 +94,8 @@ int main(int argc, char** argv) {
 	// Test for bad characters in key file.
 	for (i = 0; i < lengthOFkey - 1; i++) {
 		if ((int)keyBuffer[i] > 90 || ((int)keyBuffer[i] < 65 && (int)keyBuffer[i] != 32)) {
-			printf("otp_enc Error: key file contains bad characters!\n");
-			exit(1);
+			fprintf(stderr, "otp_enc Error: key file contains bad characters!\n");
+			exit(EXIT_FAILURE);
 		}
 	}
 
@@ -104,15 +104,16 @@ int main(int argc, char** argv) {
 
 	// Test length of strings contained in plaintext message file and key file.
 	if (lengthOFkey < lengthOFplaintext) {
-		printf("otp_enc Error: key file '%s' is too short!\n", argv[2]);
+		fprintf(stderr, "otp_enc Error: key file '%s' is too short!\n", argv[2]);
+		exit(EXIT_FAILURE);
 	}
 
 	// Create communications socket for otp_enc.
 	socketFD = socket(AF_INET, SOCK_STREAM, 0);
 	// Error test call to socket().
 	if (socketFD < 0) {
-		printf("otp_enc Error: Call to socket() failed!\n");
-		exit(1);
+		fprintf(stderr, "otp_enc Error: Call to socket() failed!\n");
+		exit(EXIT_FAILURE);
 	}
 
 	// Clear all elements of struct serv_addr_in serv_addr.
@@ -123,8 +124,8 @@ int main(int argc, char** argv) {
 
 	// Test call to gethostbyname().
 	if (server == NULL) {
-		printf("otp_enc Error: Call to gethostname() failed!\n");
-		exit(1);
+		fprintf(stderr, "otp_enc Error: Call to gethostname() failed!\n");
+		exit(EXIT_FAILURE);
 	}
 
 	// Initialize the serverAddress sin_ struct members.
@@ -137,8 +138,8 @@ int main(int argc, char** argv) {
 	
 	// Connect to otp_enc_d
 	if (connect(socketFD, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) < 0) {
-		printf("otp_enc Error: Could not connect to otp_enc_d on port %d\n", portNum);
-		exit(1);
+		fprintf(stderr, "otp_enc Error: Could not connect to otp_enc_d on port %d\n", portNum);
+		exit(EXIT_FAILURE);
 	}
 
 	// Send plaintext message to otp_enc_d daemon.
@@ -146,8 +147,8 @@ int main(int argc, char** argv) {
 
 	// Error check call to write().
 	if (numCharsSent < lengthOFplaintext - 1) {
-		printf("otp_enc Error: Could not send plaintext message to otp_enc_d on port %d.\n", portNum);
-		exit(1);
+		fprintf(stderr, "otp_enc Error: Could not send plaintext message to otp_enc_d on port %d.\n", portNum);
+		exit(EXIT_FAILURE);
 	}
 
 	// Set all elements of amBuffer to 0.
@@ -156,12 +157,12 @@ int main(int argc, char** argv) {
 	// Get acknowledgement message from server.
 	numCharsRecvd = read(socketFD, amBuffer, 3);
 	if (numCharsRecvd != 3) {
-		printf("otp_enc Error: call to read() acknowledgement message from otp_enc_d failed!\n");
-		exit(1);
+		fprintf(stderr, "otp_enc Error: call to read() acknowledgement message from otp_enc_d failed!\n");
+		exit(EXIT_FAILURE);
 	}
 
 	if (TEST) {
-		printf("otp_enc says numCharsRead into amBuffer = %d amBuffer = %s\n", numCharsRecvd, amBuffer);
+		fprintf(stderr, "otp_enc says numCharsRead into amBuffer = %d amBuffer = %s\n", numCharsRecvd, amBuffer);
 	}
 
 	// Send key file to otp_enc_d
@@ -169,8 +170,8 @@ int main(int argc, char** argv) {
 
 	// Error check call to write().
 	if (numCharsSent < lengthOFkey - 1) {
-		printf("otp_enc Error: Could not send key file to otp_enc_d on port %d.\n", portNum);
-		exit(1);
+		fprintf(stderr, "otp_enc Error: Could not send key file to otp_enc_d on port %d.\n", portNum);
+		exit(EXIT_FAILURE);
 	}
 
 	// Set all elements of inBuffer to 0, clearing the plaintext message.
@@ -181,17 +182,17 @@ int main(int argc, char** argv) {
 
 	// Error check call to read().
 	if (numCharsRecvd < 1) {
-		printf("otp_enc Error: Call to read() for receiving ciphertext message from otp_enc_d failed!\n");
-		exit(1);
+		fprintf(stderr, "otp_enc Error: Call to read() for receiving ciphertext message from otp_enc_d failed!\n");
+		exit(EXIT_FAILURE);
 	}
 
 	// Print to stdout ciphertext message received.
 	for (i = 0; i < numCharsRecvd - 1; i++) {
-		printf("%c", inBuffer[i]);
+		fprintf(stderr, "%c", inBuffer[i]);
 	}
 
 	// Add newline to ciphertext ouput stream.
-	printf("\n");
+	fprintf(stderr, "\n");
 
 	// Close socket.
 	close(socketFD);

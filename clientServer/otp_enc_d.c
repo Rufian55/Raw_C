@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
 	// Check arg count - must be 2.
 	if (argc != 2) {
 		usage();
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	// PortNum assigned command line argument after string of digits to int conversion.
@@ -72,7 +72,7 @@ int main(int argc, char **argv) {
 	// Check for proper range (arbitrarily set by author).
 	if (portNum < PORT_LOW || portNum > PORT_HIGH) {
 		usage();
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	/* Create an endpoint for communications (a socket) and return a File Descriptor reference.
@@ -86,7 +86,8 @@ int main(int argc, char **argv) {
 
 	// Check socketFD was instantiated without errors.
 	if (socketFD < 0) {
-		error("otp_enc_d ERROR opening socket connection.\nPlease try again.");
+		fprintf(stderr, "otp_enc_d ERROR opening socket connection.\nPlease try again.");
+		exit(EXIT_FAILURE);
 	}
 
 	// Sets all characters of serverAddress var to '\0' (similar to memset). Note the cast.
@@ -103,13 +104,15 @@ int main(int argc, char **argv) {
 		arg_3 => the sizeof the address that is to be bound.
 		returns -1 on error condition. */
 	if (bind(socketFD, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) < 0) {
-		error("otp_enc_d ERROR on call to bind() ");
+		fprintf(stderr, "otp_enc_d ERROR on call to bind() ");
+		exit(EXIT_FAILURE);
 	}
 
 	/* Listen on the socket with a maximum size 5 (most systems) backlog queue - the number of connections
 	that can be waiting while the process is handling a particular connection. */
 	if(listen(socketFD, 5) == -1) {
-		error("otp_enc_d Error: otp_enc_d busy, please try again.");
+		fprintf(stderr, "otp_enc_d Error: otp_enc_d busy, please try again.");
+		exit(EXIT_FAILURE);
 	}
 
 	// Get the sizeof clientAddress.
@@ -125,7 +128,8 @@ int main(int argc, char **argv) {
 
 		// Error check for call to accept().
 		if (newSocketFD < 0) {
-			error("otp_enc_d ERROR on call to accept() connection with client.");
+			fprintf(stderr, "otp_enc_d ERROR on call to accept() connection with client.");
+			exit(EXIT_FAILURE);
 		}
 
 		/* A connection has been established at this point... */
@@ -134,7 +138,8 @@ int main(int argc, char **argv) {
 		pid = fork();
 		// Error check the call to fork().
 		if (pid < 0) {
-			error("otp_enc_d ERROR on call to fork() ");
+			fprintf(stderr, "otp_enc_d ERROR on call to fork() ");
+			exit(EXIT_FAILURE);
 		}
 
 		if (pid == 0) {
@@ -148,12 +153,13 @@ int main(int argc, char **argv) {
 
 			// Error check that plaintext message was larger than 0.
 			if (lengthOFplaintext < 1) {
-				error("otp_enc_d Errror: No plaintext message accompanied your request.");
+				fprintf(stderr, "otp_enc_d Errror: No plaintext message accompanied your request.");
+				exit(EXIT_FAILURE);
 			}
 
 			if (TEST) {
-				printf("otp_enc_d (1) says plaintext message received = %s\n", inBuffer);
-				printf("otp_enc_d (1) says plaintext string length = %d\n", lengthOFplaintext);
+				fprintf(stdout, "otp_enc_d (1) says plaintext message received = %s\n", inBuffer);
+				fprintf(stdout, "otp_enc_d (1) says plaintext string length = %d\n", lengthOFplaintext);
 			}
 
 			/* Check for valid plaintextmessage received character set has been used. 
@@ -161,13 +167,13 @@ int main(int argc, char **argv) {
 			for(i = 0; i < lengthOFplaintext - 1; i++) {
 				// If the char is < A and not also a space or the char is > Z... See [4].
 				if( ((long)inBuffer[i] < 65 && (long)inBuffer[i] != 32) || (long)inBuffer[i] > 90 ) {
-					printf("Bad Char = %c\n", inBuffer[i]);
-					error("otp_enc_d Error: plaintext message contains bad characters! A-Z and \" \" only!\n");
+					fprintf(stderr, "otp_enc_d Error: plaintext message contains bad characters! A-Z and \" \" only!\n");
+					exit(EXIT_FAILURE);
 				}
 			}
 
 			if (TEST) {
-				printf("otp_enc_d (2) says plaintext message received = %s\n", inBuffer);
+				fprintf(stdout, "otp_enc_d (2) says plaintext message received = %s\n", inBuffer);
 			}
 
 
@@ -176,7 +182,8 @@ int main(int argc, char **argv) {
 
 			//Error check return message sent.
 			if (numCharsSent != 3) {
-				error("otp_enc_d Error: sending plaintext message acknowledgement back to client failed!");
+				fprintf(stderr, "otp_enc_d Error: sending plaintext message acknowledgement back to client failed!");
+				exit(EXIT_FAILURE);
 			}
 
 			// Set all elements of keyBuffer to 0.
@@ -187,19 +194,21 @@ int main(int argc, char **argv) {
 
 			// Error check lengthOFkey for < than the plaintextmessage or == 0 (no key sent).
 			if (lengthOFkey < lengthOFplaintext || lengthOFkey < 1) {
-				error("otp_enc_d Error: while reading key\nKey must be at least as long as plaintext message or no key sent!");
+				fprintf(stderr, "otp_enc_d Error: while reading key\nKey must be at least as long as plaintext message or no key sent!");
+				exit(EXIT_FAILURE);
 			}
 
 			/* Check for valid plaintextmessage received character set has been used.
 			   Note cast to long for each element of inBuffer to avoid the gcc compiler warning. */
 			for (i = 0; i < lengthOFkey; i++) {
 				if( ((long)keyBuffer[i] < 65 && (long)keyBuffer[i] != 32) || (long)keyBuffer[i] > 90) {
-					error("otp_enc_d Error: key contains bad characters! A-Z and \" \" only!\n");
+					fprintf(stderr, "otp_enc_d Error: key contains bad characters! A-Z and \" \" only!\n");
+					exit(EXIT_FAILURE);
 				}
 			}
 
 			if (TEST) {
-				printf("otp_enc_d says keyString = %s\n", keyBuffer);
+				fprintf(stdout, "otp_enc_d says keyString = %s\n", keyBuffer);
 			}
 
 			/* So we should now have a valid plaintext message and a key for encrypting.
@@ -247,11 +256,12 @@ int main(int argc, char **argv) {
 
 			// Error check call to write().
 			if (numCharsSent < lengthOFplaintext) {
-				error("otp_enc_d Error: Call to write() to newSocketFD failed!");
+				fprintf(stderr, "otp_enc_d Error: Call to write() to newSocketFD failed!");
+				exit(EXIT_FAILURE);
 			}
 
 			if (TEST) {
-				printf("otp_end_d says encrypted response = %s\n", encyrptedResponse);
+				fprintf(stdout, "otp_end_d says encrypted response = %s\n", encyrptedResponse);
 			}
 
 			// Close sockets.
@@ -281,14 +291,6 @@ void usage() {
 				 "Note this is a background \"daemon\" process.\n");
 }
 
-
-/* Error reporting. The perror() function produces a message on 
-   stderr describing the last error encountered during a call to
-   a system or library function. [6] */
-void error(const char *msg) {
-	perror(msg);
-	exit(1);
-}
 
 /* CITATIONS: Adapted from the following sources:
 [1] Lecture slides and CS344-400-F16 forum commentary, Prof. B. Brewster, Oregon State Unviversity.
