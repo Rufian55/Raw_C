@@ -3,11 +3,11 @@
 * otp_enc stands for "One Time Pad Encryption (Client)".
 * otp_enc.c is a simple single purpose client that requests and maintains 
 * a connection to the otp_enc_d encryption daemon (only) on the inputted
-* port/socket.  Once connected, otp_enc client sends a pregenerated key (see 
-* also keygen.c) and a plaintext message for encyrption. The encyrpted message
+* port/socket.  Once connected, otp_enc client sends a plaintext message and
+* a pregenerated key (see also keygen.c) for encyrption. The encyrpted message
 * is written to a user specified file and output to the screen.
-* This program will exit after succesful completion of encrytpted message so
-* but can be called again immediately for additional work.
+* This program will exit after succesful completion of an encrypted message 
+* but can be called again immediately for additional encyrption work.
 * Usage is: otp_enc {plaintext_message_file} {key_file} {port_number}
 *  where port_number must match the port the otp_enc_d daemon was started on.
 * Compile with the provided "compileall" bash script or individually:
@@ -28,7 +28,7 @@
 #define TEST 0
 
 int main(int argc, char** argv) {
-	int err;						// General purpose error testing int.
+	long err;						// General purpose error testing long int whose max size should be 2,147,483,647.
 	int FD;						// General purpose File Descriptor.
 	int i;						// The ubiquitous looping variable.
 	int portNum;					// The user defined communcations port number.
@@ -56,7 +56,7 @@ int main(int argc, char** argv) {
 	// Test for acceptable port number range.
 	sscanf(argv[3], "%d", &portNum);
 	if (portNum < 2000 || portNum > 65535) {
-		fprintf(stderr, "otp_enc Error: Invalid port number - range is 2000 - 65535 inclusive!\n");
+		fprintf(stderr, "otp_enc Error_1: Invalid port number - range is 2000 - 65535 inclusive!\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -69,12 +69,12 @@ int main(int argc, char** argv) {
 	// Determine length of message while still in plaintext message file!
 	err = stat(argv[1], &buffer);
 
-	if (err == -1) {
-		fprintf(stderr, "otp_enc Error: call to stat (1) failed!\n");
+	if (err < 0) {
+		fprintf(stderr, "otp_enc Error_2: call to stat() failed! Does file \"%s\" exist?\n", argv[1]);
 		exit(EXIT_FAILURE);
 	}
 
-	// Assign length of plaintext message and drop the newlines.
+	// Assign length of plaintext message and drop the newline.
 	lengthOfMsg = buffer.st_size - 1;
 
 	if (TEST) {
@@ -86,7 +86,7 @@ int main(int argc, char** argv) {
 
 	// Error test call to malloc().
 	if (plaintextMsg == NULL) {
-		fprintf(stderr, "Memory Allocation Failure 1.\n");
+		fprintf(stderr, "otp_enc Error_3: Memory Allocation Failure.\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -95,7 +95,7 @@ int main(int argc, char** argv) {
 
 	// Error test call to open() FD.
 	if (FD < 1) {
-		fprintf(stderr, "otp_enc Error: Cannot open file %s.\n", argv[1]);
+		fprintf(stderr, "otp_enc Error_4: Cannot open file %s.\n", argv[1]);
 		exit(EXIT_FAILURE);
 	}
 
@@ -104,7 +104,7 @@ int main(int argc, char** argv) {
 
 	// Error test call to read(). Picks up fialure (-1) and empty file (0).
 	if (err < 0) {
-		fprintf(stderr, "otp_enc Error: reading plaintext message file failed!");
+		fprintf(stderr, "otp_enc Error_5: reading plaintext message file \"%s\" failed!\n", argv[1]);
 		exit(EXIT_FAILURE);
 	}
 
@@ -115,8 +115,7 @@ int main(int argc, char** argv) {
 	// Validate contents of plaintext message.
 	for (i = 0; i < lengthOfMsg; i++) {
 		if ((int)plaintextMsg[i] > 90 || ((int)plaintextMsg[i] < 65 && (int)plaintextMsg[i] != 32)) {
-			printf("Error char = %d END\n", plaintextMsg[i]);
-			fprintf(stderr, "otp_enc Error: plaintextMsg string contains bad characters!\n");
+			fprintf(stderr, "otp_enc Error_6: plaintextMsg string contains bad characters!\n");
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -130,8 +129,8 @@ int main(int argc, char** argv) {
 	// Determine length of key while still in plaintext message file!
 	err = stat(argv[2], &buffer);
 
-	if (err == -1) {
-		fprintf(stderr, "otp_enc Error: call to stat (2) failed!\n");
+	if (err < 0) {
+		fprintf(stderr, "otp_enc Error_7: call to stat() failed! Does file %s exist?\n", argv[2]);
 		exit(EXIT_FAILURE);
 	}
 
@@ -147,7 +146,7 @@ int main(int argc, char** argv) {
 
 	// Error test call to malloc().
 	if (key == NULL) {
-		fprintf(stderr, "Memory Allocation Failure 2.\n");
+		fprintf(stderr, "otp_enc Error_8: Memory Allocation Failure.\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -156,7 +155,7 @@ int main(int argc, char** argv) {
 
 	// Error test call to open() FD.
 	if (FD < 0) {
-		fprintf(stderr, "otp_enc Error: Cannot open file %s.\n", argv[2]);
+		fprintf(stderr, "otp_enc Error_9: Cannot open file %s.\n", argv[2]);
 		exit(EXIT_FAILURE);
 	}
 
@@ -164,8 +163,8 @@ int main(int argc, char** argv) {
 	err = read(FD, key, lengthOfKey);
 
 	// Error test call to read(). Picks up failure (-1) and empty file (0).
-	if (err < 1) {
-		fprintf(stderr, "otp_enc Error: reading key file failed!");
+	if (err < 0) {
+		fprintf(stderr, "otp_enc Error_10: reading key file \"%s\" failed!\n", argv[2]);
 		exit(EXIT_FAILURE);
 	}
 
@@ -176,7 +175,7 @@ int main(int argc, char** argv) {
 	// Validate contents of plaintext
 	for (i = 0; i < lengthOfKey; i++) {
 		if ((int)key[i] > 90 || ((int)key[i] < 65 && (int)key[i] != 32)) {
-			fprintf(stderr, "otp_enc Error: key string contains bad characters!\n");
+			fprintf(stderr, "otp_enc Error_11: key string contains bad characters!\n");
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -186,7 +185,8 @@ int main(int argc, char** argv) {
 
 	// Test length of strings contained in plaintext string and key string.
 	if (lengthOfKey < lengthOfMsg) {
-		fprintf(stderr, "otp_enc Error: key file '%s' is too short!\n", argv[2]);
+		fprintf(stderr, "otp_enc Error_12: key file '%s' is too short! %s = %ld chars, "
+					 "message = %ld chars.\n", argv[2], argv[2], lengthOfKey, lengthOfMsg);
 		exit(EXIT_FAILURE);
 	}
 
@@ -194,7 +194,7 @@ int main(int argc, char** argv) {
 	socketFD = socket(AF_INET, SOCK_STREAM, 0);
 	// Error test call to socket().
 	if (socketFD < 0) {
-		fprintf(stderr, "otp_enc Error: Call to socket() failed!\n");
+		fprintf(stderr, "otp_enc Error_13: Call to socket() failed!\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -206,7 +206,7 @@ int main(int argc, char** argv) {
 
 	// Test call to gethostbyname().
 	if (server == NULL) {
-		fprintf(stderr, "otp_enc Error: Call to gethostname() failed!\n");
+		fprintf(stderr, "otp_enc Error_14: Call to gethostname() failed!\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -220,7 +220,7 @@ int main(int argc, char** argv) {
 	
 	// Connect to otp_enc_d
 	if (connect(socketFD, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) < 0) {
-		fprintf(stderr, "otp_enc Error: Could not connect to otp_enc_d on port %d\n", portNum);
+		fprintf(stderr, "otp_enc Error_15: Could not connect to otp_enc_d on port %d\n", portNum);
 		exit(EXIT_FAILURE);
 	}
 
@@ -229,7 +229,7 @@ int main(int argc, char** argv) {
 
 	// Error check call to write().
 	if(err != 5) {
-		fprintf(stderr, "otp_enc Error: SYN handshake message write failed!\n");
+		fprintf(stderr, "otp_enc Error_16: SYN handshake message write failed!\n");
 	}
 
 	// Initialize ack buffer to all '/0'.
@@ -238,7 +238,7 @@ int main(int argc, char** argv) {
 	// Read for acknowledgement from otp_enc_d server.
 	err = read(socketFD, ack, 5);
 	if (err != 5) {
-		fprintf(stderr, "otp_enc Error: call to read ack failed, err = %d.\n", err);
+		fprintf(stderr, "otp_enc Error_17: call to read ack failed, err = %ld.\n", err);
 	}
 
 	if (TEST) {
@@ -248,12 +248,12 @@ int main(int argc, char** argv) {
 
 	// Compare returned ack and our expected synAck (if succesful, otp_enc_d and otp_enc passwords matched!)
 	if (strncmp(ack, synAck, 5) != 0) {
-		fprintf(stderr, "otp_enc Error: Handshake to server failed - check the port number!\n");
+		fprintf(stderr, "otp_enc Error_18: Handshake to otp_enc_d failed! Is port number %d correct?\n", portNum);
 		exit(EXIT_FAILURE);
 	}
 
-	/* Made it here, so task otp_enc_d to encrypts a string with the key! but first, we have to send the lengthOfMsg and
-	   lengthOfKey long integer vars to otp_enc_d so that program can allocate memory, etc.					[2] */
+	/* Made it here, so task otp_enc_d to encrypt a string with the key! But first, we have to send the 
+	   lengthOfMsg and lengthOfKey size_t integer vars to otp_enc_d so that program can allocate memory, etc. [2]*/
 
 	// Convert lengthofMsg var to network Endian.
 	convertedLOM = htonl(lengthOfMsg);
@@ -266,12 +266,12 @@ int main(int argc, char** argv) {
 	err = write(socketFD, &convertedLOM, sizeof(convertedLOM));
 
 	if (TEST) {
-		printf("otp_enc err for write convertedLOM = %d\n", err);
+		printf("otp_enc err for write convertedLOM = %ld\n", err);
 	}
 
 	// Error check call to write().
-	if (err < 1) {
-		fprintf(stderr, "otp_enc Error: Call to write lengthOfMsg to otp_enc_d failed!\n");
+	if (err < 0) {
+		fprintf(stderr, "otp_enc Error_19: Call to write lengthOfMsg to otp_enc_d failed!\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -287,12 +287,12 @@ int main(int argc, char** argv) {
 	err = write(socketFD, &convertedLOK, sizeof(convertedLOK));
 
 	if (TEST) {
-		printf("otp_enc err for write convertedLOK = %d\n", err);
+		printf("otp_enc err for write convertedLOK = %ld\n", err);
 	}
 
 	// Error check call to write().
-	if (err < 1) {
-		fprintf(stderr, "otp_enc Error: Call to write lengthOfKey to otp_enc_d failed!\n");
+	if (err < 0) {
+		fprintf(stderr, "otp_enc Error_20: Call to write lengthOfKey to otp_enc_d failed!\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -300,8 +300,8 @@ int main(int argc, char** argv) {
 	err = write(socketFD, plaintextMsg, lengthOfMsg);
 
 	// Error check call to write().
-	if (err < lengthOfMsg) {
-		fprintf(stderr, "otp_enc Error: Could not send plaintext message to otp_enc_d on port %d.\n", portNum);
+	if (err < 0) {
+		fprintf(stderr, "otp_enc Error_21: Could not send plaintext message to otp_enc_d on port %d.\n", portNum);
 		exit(EXIT_FAILURE);
 	}
 
@@ -309,8 +309,8 @@ int main(int argc, char** argv) {
 	err = write(socketFD, key, lengthOfKey);
 
 	// Error check call to write().
-	if (err < lengthOfKey) {
-		fprintf(stderr, "otp_enc Error: Could not send key file to otp_enc_d on port %d.\n", portNum);
+	if (err < 0) {
+		fprintf(stderr, "otp_enc Error_22: Could not send key file to otp_enc_d. err = %ld.\n", err);
 		exit(EXIT_FAILURE);
 	}
 
@@ -319,7 +319,7 @@ int main(int argc, char** argv) {
 
 	// Check for error condition on call to malloc().
 	if (cipherText == NULL) {
-		fprintf(stderr, "otp_enc Error: Memory allocation failed!\n");
+		fprintf(stderr, "otp_enc Error_23: Memory Allocation failed!\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -327,8 +327,8 @@ int main(int argc, char** argv) {
 	err = read(socketFD, cipherText, lengthOfMsg);
 
 	// Error check call to read().
-	if (err < lengthOfMsg) {
-		fprintf(stderr, "otp_enc Error: Call to read() for receiving ciphertext message from otp_enc_d failed!\n");
+	if (err < 0) {
+		fprintf(stderr, "otp_enc Error_24: Call to read() for receiving ciphertext message from otp_enc_d failed!\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -356,5 +356,4 @@ int main(int argc, char** argv) {
 /* CITATIONS:
 [1] http://man7.org/linux/man-pages/man2/stat.2.html
 [2] http://stackoverflow.com/questions/9140409/transfer-integer-over-a-socket-in-c
-
 */
