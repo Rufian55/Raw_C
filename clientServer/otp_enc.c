@@ -115,7 +115,7 @@ int main(int argc, char** argv) {
 	// Validate contents of plaintext message.
 	for (i = 0; i < lengthOfMsg; i++) {
 		if ((int)plaintextMsg[i] > 90 || ((int)plaintextMsg[i] < 65 && (int)plaintextMsg[i] != 32)) {
-			fprintf(stderr, "otp_enc Error_6: plaintextMsg string contains bad characters!\n");
+			fprintf(stderr, "otp_enc Error_6: %s contains bad characters!\n", argv[1]);
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -213,7 +213,7 @@ int main(int argc, char** argv) {
 	// Initialize the serverAddress sin_ struct members.
 	serverAddress.sin_family = AF_INET;		// Address Family = Internet IPv4.
 	serverAddress.sin_port = htons(portNum);	/* Converts portNum in host byte order to portNum in
-									     network byte order (Big/Little Endian). */
+									        network byte order (Big/Little Endian). */
 
 	// Copies n bytes from src to dest [ void bcopy(void *src, void *dest, size_t n); ] note casts.
 	bcopy((char *)server->h_addr, (char *)&serverAddress.sin_addr.s_addr, server->h_length);
@@ -248,7 +248,7 @@ int main(int argc, char** argv) {
 
 	// Compare returned ack and our expected synAck (if succesful, otp_enc_d and otp_enc passwords matched!)
 	if (strncmp(ack, synAck, 5) != 0) {
-		fprintf(stderr, "otp_enc Error_18: Handshake to otp_enc_d failed! Is port number %d correct?\n", portNum);
+		fprintf(stderr, "otp_enc Error_18: Handshake to otp_enc_d failed, likely due to bad call to otp_dec_d on port %d.\n", portNum);
 		exit(EXIT_FAILURE);
 	}
 

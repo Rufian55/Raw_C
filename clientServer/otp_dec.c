@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
 	// Test for acceptable port number range.
 	sscanf(argv[3], "%d", &portNum);
 	if (portNum < 2000 || portNum > 65535) {
-		fprintf(stderr, "otp_dec Error: Invalid port number - range is 2000 - 65535 inclusive!\n");
+		fprintf(stderr, "otp_dec Error_1: Invalid port number - range is 2000 - 65535 inclusive!\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
 	err = stat(argv[1], &buffer);
 
 	if (err < 0) {
-		fprintf(stderr, "otp_dec Error: call to stat() failed! Does file \"%s\" exist?\n", argv[1]);
+		fprintf(stderr, "otp_dec Error_2: call to stat() failed! Does file \"%s\" exist?\n", argv[1]);
 		exit(EXIT_FAILURE);
 	}
 
@@ -87,7 +87,7 @@ int main(int argc, char** argv) {
 
 	// Error test call to malloc().
 	if (cipherText == NULL) {
-		fprintf(stderr, "otp_dec Error: Memory Allocation Failure.\n");
+		fprintf(stderr, "otp_dec Error_3: Memory Allocation Failure.\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -96,7 +96,7 @@ int main(int argc, char** argv) {
 
 	// Error test call to open() FD.
 	if (FD < 1) {
-		fprintf(stderr, "otp_dec Error: Cannot open file %s.\n", argv[1]);
+		fprintf(stderr, "otp_dec Error_4: Cannot open file %s.\n", argv[1]);
 		exit(EXIT_FAILURE);
 	}
 
@@ -105,7 +105,7 @@ int main(int argc, char** argv) {
 
 	// Error test call to read(). Picks up failure (-1) and empty file (0).
 	if (err < 0) {
-		fprintf(stderr, "otp_dec Error: reading cipherText message file \"%s\" failed!\n", argv[1]);
+		fprintf(stderr, "otp_dec Error_5: reading cipherText message file \"%s\" failed!\n", argv[1]);
 		exit(EXIT_FAILURE);
 	}
 
@@ -116,12 +116,12 @@ int main(int argc, char** argv) {
 	// Validate contents of cipherText message.
 	for (i = 0; i < lengthOfMsg; i++) {
 		if ((int)cipherText[i] > 90 || ((int)cipherText[i] < 65 && (int)cipherText[i] != 32)) {
-			fprintf(stderr, "otp_dec Error: cipherText string contains bad characters!\n");
+			fprintf(stderr, "otp_dec Error_6: %s contains bad characters!\n", argv[1]);
 			exit(EXIT_FAILURE);
 		}
 	}
 
-	// Close cipherText message file.
+	// Close cipherText message file descriptor.
 	close(FD);
 
 
@@ -131,7 +131,7 @@ int main(int argc, char** argv) {
 	err = stat(argv[2], &buffer);
 
 	if (err < 0) {
-		fprintf(stderr, "otp_dec Error: call to stat() failed! Does file %s exist?\n", argv[2]);
+		fprintf(stderr, "otp_dec Error_7: call to stat() failed! Does file %s exist?\n", argv[2]);
 		exit(EXIT_FAILURE);
 	}
 
@@ -147,7 +147,7 @@ int main(int argc, char** argv) {
 
 	// Error test call to malloc().
 	if (key == NULL) {
-		fprintf(stderr, "otp_dec Error: Memory Allocation Failure.\n");
+		fprintf(stderr, "otp_dec Error_8: Memory Allocation Failure.\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -156,7 +156,7 @@ int main(int argc, char** argv) {
 
 	// Error test call to open() FD.
 	if (FD < 0) {
-		fprintf(stderr, "otp_dec Error: Cannot open file %s.\n", argv[2]);
+		fprintf(stderr, "otp_dec Error_9: Cannot open file %s.\n", argv[2]);
 		exit(EXIT_FAILURE);
 	}
 
@@ -165,7 +165,7 @@ int main(int argc, char** argv) {
 
 	// Error test call to read(). Picks up failure (-1) and empty file (0).
 	if (err < 0) {
-		fprintf(stderr, "otp_dec Error: reading key file \"%s\" failed!\n", argv[2]);
+		fprintf(stderr, "otp_dec Error_10: reading key file \"%s\" failed!\n", argv[2]);
 		exit(EXIT_FAILURE);
 	}
 
@@ -176,7 +176,7 @@ int main(int argc, char** argv) {
 	// Validate contents of plaintext
 	for (i = 0; i < lengthOfKey; i++) {
 		if ((int)key[i] > 90 || ((int)key[i] < 65 && (int)key[i] != 32)) {
-			fprintf(stderr, "otp_dec Error: key string contains bad characters!\n");
+			fprintf(stderr, "otp_dec Error_11: key string contains bad characters!\n");
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -186,7 +186,7 @@ int main(int argc, char** argv) {
 
 	// Test length of strings contained in cipherText string and key string.
 	if (lengthOfKey < lengthOfMsg) {
-		fprintf(stderr, "otp_dec Error: key file '%s' is too short! %s = %ld chars, "
+		fprintf(stderr, "otp_dec Error_12: key file '%s' is too short! %s = %ld chars, "
 			"message = %ld chars.\n", argv[2], argv[2], lengthOfKey, lengthOfMsg);
 		exit(EXIT_FAILURE);
 	}
@@ -196,7 +196,7 @@ int main(int argc, char** argv) {
 
 	// Error test call to socket().
 	if (socketFD < 0) {
-		fprintf(stderr, "otp_dec Error: Call to socket() failed!\n");
+		fprintf(stderr, "otp_dec Error_13: Call to socket() failed!\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -208,7 +208,7 @@ int main(int argc, char** argv) {
 
 	// Test call to gethostbyname().
 	if (server == NULL) {
-		fprintf(stderr, "otp_dec Error: Call to gethostname() failed!\n");
+		fprintf(stderr, "otp_dec Error_14: Call to gethostname() failed!\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -222,7 +222,7 @@ int main(int argc, char** argv) {
 
 	// Connect to otp_dec_d.
 	if (connect(socketFD, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) < 0) {
-		fprintf(stderr, "otp_dec Error: Could not connect to otp_dec_d on port %d\n", portNum);
+		fprintf(stderr, "otp_dec Error_15: Could not connect to otp_dec_d on port %d\n", portNum);
 		exit(EXIT_FAILURE);
 	}
 
@@ -231,7 +231,7 @@ int main(int argc, char** argv) {
 
 	// Error check call to write().
 	if (err != 5) {
-		fprintf(stderr, "otp_dec Error: SYN handshake message write failed!\n");
+		fprintf(stderr, "otp_dec Error_16: SYN handshake message write failed!\n");
 	}
 
 	// Initialize ack buffer to all '/0'.
@@ -239,8 +239,10 @@ int main(int argc, char** argv) {
 
 	// Read for acknowledgement from otp_enc_d server.
 	err = read(socketFD, ack, 5);
+
+	// Error check call to read().
 	if (err != 5) {
-		fprintf(stderr, "otp_dec Error: call to read ack failed, err = %ld.\n", err);
+		fprintf(stderr, "otp_dec Error_17: call to read ack failed, err = %ld.\n", err);
 	}
 
 	if (TEST) {
@@ -250,12 +252,12 @@ int main(int argc, char** argv) {
 
 	// Compare returned ack and our expected synAck (if succesful, otp_dec_d and otp_dec passwords matched!)
 	if (strncmp(ack, synAck, 5) != 0) {
-		fprintf(stderr, "otp_dec Error: Handshake to otp_dec_d failed! Is port number %d correct?\n", portNum);
+		fprintf(stderr, "otp_dec Error_18: Handshake to otp_dec_d failed, likely due to bad call to otp_enc_d on port %d.\n", portNum);
 		exit(EXIT_FAILURE);
 	}
 
 	/* Made it here, so task otp_dec_d to unencrypt a string with the key! But first, we have to send the
-	lengthOfMsg and lengthOfKey long integer vars to otp_dec_d so that program can allocate memory, etc. [2]*/
+	   lengthOfMsg and lengthOfKey long integer vars to otp_dec_d so that program can allocate memory, etc. [2]*/
 
 	// Convert lengthofMsg var to network Endian.
 	convertedLOM = htonl(lengthOfMsg);
@@ -273,10 +275,9 @@ int main(int argc, char** argv) {
 
 	// Error check call to write().
 	if (err < 0) {
-		fprintf(stderr, "otp_dec Error: Call to write lengthOfMsg to otp_dec_d failed!\n");
+		fprintf(stderr, "otp_dec Error_19: Call to write lengthOfMsg to otp_dec_d failed!\n");
 		exit(EXIT_FAILURE);
 	}
-
 
 	// Convert lengthOfMsg var to network Endian.
 	convertedLOK = htonl(lengthOfKey);
@@ -294,7 +295,7 @@ int main(int argc, char** argv) {
 
 	// Error check call to write().
 	if (err < 0) {
-		fprintf(stderr, "otp_dec Error: Call to write lengthOfKey to otp_dec_d failed!\n");
+		fprintf(stderr, "otp_dec Error_20: Call to write lengthOfKey to otp_dec_d failed!\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -303,7 +304,7 @@ int main(int argc, char** argv) {
 
 	// Error check call to write().
 	if (err < 0) {
-		fprintf(stderr, "otp_dec Error: Could not send cipherText message to otp_dec_d on port %d.\n", portNum);
+		fprintf(stderr, "otp_dec Error_21: Could not send cipherText message to otp_dec_d on port %d.\n", portNum);
 		exit(EXIT_FAILURE);
 	}
 
@@ -312,7 +313,7 @@ int main(int argc, char** argv) {
 
 	// Error check call to write().
 	if (err < 0) {
-		fprintf(stderr, "otp_enc Error: Could not send key file to otp_dec_d on port %d.\n", portNum);
+		fprintf(stderr, "otp_enc Error_22: Could not send key file to otp_dec_d on port %d.\n", portNum);
 		exit(EXIT_FAILURE);
 	}
 
@@ -321,7 +322,7 @@ int main(int argc, char** argv) {
 
 	// Check for error condition on call to malloc().
 	if (plaintextMsg == NULL) {
-		fprintf(stderr, "otp_dec Error: Memory Allocation failed!\n");
+		fprintf(stderr, "otp_dec Error_23: Memory Allocation failed!\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -330,7 +331,7 @@ int main(int argc, char** argv) {
 
 	// Error check call to read().
 	if (err < lengthOfMsg) {
-		fprintf(stderr, "otp_dec Error: Call to read() for receiving plaintext message from otp_dec_d failed!\n");
+		fprintf(stderr, "otp_dec Error_24: Call to read() for receiving plaintext message from otp_dec_d failed!\n");
 		exit(EXIT_FAILURE);
 	}
 

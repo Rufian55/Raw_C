@@ -37,10 +37,8 @@ int main(int argc, char **argv) {
 	long err;							// General purpose error testing long int whose max size should be 2,147,483,647.
 	char *msgBuffer;					// Pointer to incoming plaintext messages storage buffer.
 	size_t lengthOfMsg = 0;				// Calculated length of plaintext message.
-//	size_t lengthOfMsgConverted			// The converted length of message int - needs conversion to host byte order.
 	char *keyBuffer;					// Pointer to incoming key storage buffer.
 	size_t lengthOfKey = 0;				// Calculated length of the key.
-	size_t lengthOfKeyConverted;			// The converted length of key int - needs conversion to host byte order.
 	char *encyrptedResponse;				// Pointer to the encyrpted response buffer prior to sending to otp_enc client.
 	int socketFD;						// A socket file descriptor for the socket() call.
 	int newSocketFD;					// Another socket file descriptor but for upto 5x accept() call.
@@ -75,6 +73,8 @@ int main(int argc, char **argv) {
 		usage();
 		exit(EXIT_FAILURE);
 	}
+
+	/* Initialize the server. */
 
 	/* Create an endpoint for communications (a socket) and return a File Descriptor reference.
 	Syntax: int socket(int domain, int type, int protocol);
@@ -119,6 +119,7 @@ int main(int argc, char **argv) {
 	// Get the sizeof clientAddress.
 	clientAddressLength = sizeof(clientAddress);
 
+	/* Start the server infinite loop. */
 	while (true) {
 		/* The accept() system call causes the process to block until a client connects to the server.
 		Thus, it wakes up the process when a connection from a client has been successfully established.
@@ -143,9 +144,8 @@ int main(int argc, char **argv) {
 			exit(EXIT_FAILURE);
 		}
 
+		/* We have a child process on a good port, so we begin communicating with error checking routines. */
 		if (pid == 0) {
-			/* We have a child process on a good port, so we begin communicating with error checking routines. */
-
 			// Initialize synBuffer c-string.
 			memset(synBuffer, '\0', 6);
 
@@ -176,11 +176,11 @@ int main(int argc, char **argv) {
 					fprintf(stderr, "otp_enc_d Error_8: call to write() (bounce back) password failed!\n");
 				}
 				/* Since an incorrect password has been supplied, skip everything except closing the newSocketFD
-				   at the bottom of this loop.  See the **************ect... commented pwFail: label below */
+				   at the bottom of this loop.  See the **************  ect... commented pwFail: label below */
 				goto pwFail;
 			}
 
-			// Read in the lengthOfMsg from otp_enc.
+			// Read in the lengthOfMsg from otp_enc in this manner as we are expecting an htonl formatted integer.
 			err = read(newSocketFD, &lengthOfMsg, sizeof(lengthOfMsg));
 
 			if (TEST) {
@@ -193,12 +193,11 @@ int main(int argc, char **argv) {
 				exit(EXIT_FAILURE);
 			}
 
-			// Convert to network Endianess.		[7]
+			// Convert to host machine Endianess.		[7]
 			lengthOfMsg = ntohl(lengthOfMsg);
 
-
-			// Read in the lengthOfKey from otp_enc.
-			err = read(newSocketFD, &lengthOfKeyConverted, sizeof(lengthOfKeyConverted));
+			// Read in the lengthOfKey from otp_enc in this manner as we are expecting an htonl formatted integer.
+			err = read(newSocketFD, &lengthOfKey, sizeof(lengthOfKey));
 
 			if (TEST) {
 				printf("otp_enc_d err for read convertedLOK = %ld\n", err);
@@ -210,8 +209,8 @@ int main(int argc, char **argv) {
 				exit(EXIT_FAILURE);
 			}
 
-			// Convert to network Endianess.		[7]
-			lengthOfKey = ntohl(lengthOfKeyConverted);
+			// Convert to host machine Endianess.		[7]
+			lengthOfKey = ntohl(lengthOfKey);
 
 			if (TEST) {
 				printf("lengthOfMsg = %zu\n", lengthOfMsg);
@@ -220,7 +219,8 @@ int main(int argc, char **argv) {
 
 			// Error check lengthOfKey for < than lengthOfMsg.
 			if (lengthOfKey < lengthOfMsg) {
-				fprintf(stderr, "otp_enc_d Error_11: while reading key\nKey must be at least as long as plaintext message or no key sent!\n");
+				fprintf(stderr, "otp_enc_d Error_11: while reading key\nKey must be at least"
+							" as long as plaintext message or no key sent!\n");
 				exit(EXIT_FAILURE);
 			}
 
@@ -254,7 +254,8 @@ int main(int argc, char **argv) {
 			for(i = 0; i < lengthOfMsg; i++) {
 				// If the char is < A and not also a space or the char is > Z... See [4].
 				if( ((long)msgBuffer[i] < 65 && (long)msgBuffer[i] != 32) || (long)msgBuffer[i] > 90 ) {
-					fprintf(stderr, "otp_enc_d Error_14: plaintext message contains bad characters! A-Z and \" \" only!\n");
+					fprintf(stderr, "otp_enc_d Error_14: plaintext message contains bad characters!"
+								" A-Z and \" \" only!\n");
 					exit(EXIT_FAILURE);
 				}
 			}
@@ -272,29 +273,18 @@ int main(int argc, char **argv) {
 			// Read the key.
 			err = read(newSocketFD, keyBuffer, lengthOfKey);
 
-//printf("otp_enc_d err = %ld\n", err);
-			
 			// Verfiy that all of the key was read in.
 			if (err < 0){//lengthOfKey) {
 				fprintf(stderr, "otp_enc_d Error_16: call to read() key from otp_enc failed! err = %ld\n", err);
 				exit(EXIT_FAILURE);
 			}
 
-			/* Check for valid key received character set has been used.
-			   Note cast to long for each element of keyBuffer to avoid the gcc compiler warning. */
-//			for (i = 0; i < lengthOfKey; i++) {
-//				if( ((long)keyBuffer[i] < 65 && (long)keyBuffer[i] != 32) || (long)keyBuffer[i] > 90) {
-//					fprintf(stderr, "otp_enc_d Error_17: key contains bad characters! A-Z and \" \" only!\n");
-//					exit(EXIT_FAILURE);
-//				}
-//			}
-
 			if (TEST) {
 				fprintf(stdout, "otp_enc_d says keyString = %s\n", keyBuffer);
 			}
 
 			/* So we should now have a valid plaintext message and a key for encrypting.
-			   We now do the actual encryption process of the plaintext message and return it. */
+			   We now do the actual encryption process of the plaintext message and send it. */
 
 			// Allocate memeory for the encyrptedResponse buffer.
 			encyrptedResponse = malloc(lengthOfMsg * sizeof(char));
@@ -359,8 +349,8 @@ int main(int argc, char **argv) {
 			free(encyrptedResponse);
 			encyrptedResponse = NULL;
 
-/***************** Jump to here because password sent by otp_enc was incorrect (most
-			    likely because otp_dec rather than otp_enc attempted to connect). */
+/************* Jump to here because password sent by otp_enc was incorrect (most
+			likely because otp_dec rather than otp_enc attempted to connect). */
 			pwFail:
 
 			// Close sockets.
@@ -373,7 +363,7 @@ int main(int argc, char **argv) {
 			close(newSocketFD);
 		}
 
-		// Avoid zombied process after otp_enc call.
+		// Avoid zombied child process after otp_enc call.
 		waitpid(pid, NULL, 0);
 
 	}// End while.

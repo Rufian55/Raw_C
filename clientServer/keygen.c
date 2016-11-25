@@ -1,6 +1,7 @@
 /******************************************************************************
+* Chris Kearns, CS344-400-F16, Proejct 4, kearnsc@oregonstate.edu 2 Dec 2016
 * keygen.c is a simple cipher text key generator using rand(). Usage is:
-* keygen {int} > {textFileName} where int is an int from 1 to INT_MAX-1
+* keygen {int} > {textFileName} where int is an int from 1 to 100,000
 * inclusive as the otp_* programs require a keygen generated text file of the
 * key string. Compile with the "compileall" bash script or individually: 
 * gcc keygen.c -o keygen -g -Wall
@@ -9,7 +10,7 @@
 #include<stdlib.h>
 #include<time.h>
 
-// Define maximum key length as MAX_INT - 1 (for the '/n').
+// Define maximum key length. Note "MAX_INT - 1" (for '/n') is true max.
 #define MAX_KEY_LENGTH 100000
 
 void usage();
