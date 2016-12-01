@@ -7,7 +7,7 @@
 * Usage is: [arg1 arg2 ...arg512][< input_file][> output_file][&]
 * Note: max argv: 512, max chars: 2,048.
 * Compile with gcc smallshSTRUCT.c -o smallsh -g -Wall.						[1]
-* This version includes a struct array to house and kill backgournded processes
+* This version includes a struct array to house and kill backgrounded processes
 * on exit rather than letting them complete and potentially "Z" for awhile... 
 ******************************************************************************/
 #include <fcntl.h>
