@@ -279,16 +279,9 @@ int main() {
 		free(outFileName);
 		outFileName = NULL;
 
-		// Check for finished background processes.
-<<<<<<< HEAD
-		pid = waitpid(-1, &status, WNOHANG);
-		// Check them all (-1 returned on waitpid() failure).								[11]
-		while (pid > 0 && !isInBackground(pid))  {
-=======
 		pid = waitpid(pid, &status, WNOHANG);
 		// Check them all (-1 returned on waitpid() failure).						[11]
 		while (pid > 0 && isInBackground(pid))  {
->>>>>>> origin/master
 			printf("Backgrounded pid %i finished: ", pid);
 			fflush(stdout);
 			popPID2bg(pid);
