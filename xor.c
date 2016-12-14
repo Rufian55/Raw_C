@@ -5,10 +5,10 @@
 int xor(int a, int b);
 
 int main(void) {
-	printf("%d", xor(1, 0) ); // 1
-	printf("%d", xor(1, 1) ); // 0
-	printf("%d", xor(0, 1) ); // 1
-	printf("%d", xor(0, 0) ); // 0
+	printf("1 xor 0 is %d\n", xor(1, 0) ); // 1
+	printf("1 xor 1 is %d\n", xor(1, 1) ); // 0
+	printf("0 xor 1 is %d\n", xor(0, 1) ); // 1
+	printf("0 xor 0 is %d\n", xor(0, 0) ); // 0
 	return 0;
 }
 
