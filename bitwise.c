@@ -16,7 +16,7 @@ int main() {
 
 /*	11000001	"A" with parity bit set.
 	01111111	"127" in binary.
-   & --------
+      & --------
 	01000001	"A" with parity bit unset.	*/
 
 	testy = unsetParityBit();
@@ -25,7 +25,7 @@ int main() {
 
 /*	10000000	"128" in binary.
 	00000011	"3" in binary.
-   | --------
+      | --------
 	10000011	"3" in binary with parity bit set.	
 			but you see -125 (binary 1000 0011) */
 
@@ -36,7 +36,7 @@ int main() {
 
 /*	11111111	"127" in binary.
 	01111000	"120" in binary.
-   ^ --------
+      ^ --------
 	00000111	which is "7" in binary. */
 
 	testy = xorMyInt();
