@@ -1,5 +1,7 @@
 /* Simple Stack Demo Program.
- * Adapted from C Complete Reference Manual, Shildt */
+ * Adapted from C Complete Reference Manual, Shildt
+ * See DataStructures Repositry for more advanced stacks.
+ */
 #include <stdio.h>
 #include <stdlib.h>
 
