@@ -17,7 +17,7 @@ void converge(char *target, char *source) {
 	int i, j;
 	printf("%s\n", target);
 
-	// i set to incement from 0, j set to decement from 30.
+	// i set to incement from 0, j set to decrement from 30.
 	for (i = 0, j = strlen(source); i <= j; i++, j--) {
 		target[i] = source[i];
 		target[j] = source[j];
