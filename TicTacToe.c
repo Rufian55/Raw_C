@@ -1,5 +1,5 @@
 /* A simple Tic Tac Toe game.
- * Adapted from C Reference Manyual, Shildt */
+ * Adapted from C Reference Manual, Shildt */
 #include <stdio.h>
 #include <stdlib.h>
 
