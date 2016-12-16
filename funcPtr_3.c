@@ -11,7 +11,7 @@
 void check(char *a, char *b, int(*cmp)(const char *, const char *));
 int compvalues(const char *a, const char *b);
 
-int main(void) {
+int main() {
 	char s1[80], s2[80];
 
 	printf("Enter first value or string.\n");
