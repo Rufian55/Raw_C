@@ -14,10 +14,8 @@ int main() {
 	printf("Enter an int to be factored.\n");
 	scanf("%d", &f);
 
-	f = (int)f;// Just in case a char is entered.
-
 	if (f < 1 || f > 13) {
-		printf("Factorial man! ints between 1 and 13 inclusive only!\n");
+		printf("Factorial man! Ints between 1 and 13 inclusive only!\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -31,11 +29,13 @@ int main() {
 
 /* Recursive */
 int R_factorial(int n) {
+	static int i = 1;
 	int answer;
 	if (n == 1)
 		return 1;
-
 	answer = R_factorial(n - 1) * n;
+	printf("On stack %d, answer = %d\n", i, answer);
+	i++;
 	return(answer);
 }
 
