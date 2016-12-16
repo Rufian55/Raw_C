@@ -7,7 +7,7 @@
 // Prototype.
 char *match(char c, char *s);
 
-int main(void) {
+int main() {
 	char s[80], *p, ch;
 
 	printf("Enter the string to search.\n");
