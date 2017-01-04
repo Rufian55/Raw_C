@@ -1,6 +1,8 @@
-/* The program substitutes spaces for tabs
-in a text file and supplies error checking. */
-
+/******************************************************************************
+* The program substitutes spaces for tabs in a text file and supplies error 
+* checking.
+* Compile with gcc detab.c -o detab -g -Wall
+******************************************************************************/
 #include <stdio.h>
 #include <stdlib.h>
 
