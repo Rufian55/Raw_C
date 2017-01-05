@@ -146,9 +146,8 @@ void list() {
 // Trim off the trailing '\n'.
 void trim(char *str) {
 	int i;
-	for (i = 0; i < strlen(str); i++) {
-		if (str[i] == '\n') {
-			str[i] = '\0';
-		}
+	i = strlen(str) - 1;
+	if (str[i] == '\n') {
+		str[i] = '\0';
 	}
 }
