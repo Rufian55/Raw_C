@@ -18,6 +18,9 @@ struct addr {
 	char zip[12];
 } addr_list[MAX];
 
+// For searching single records.
+struct addr info;
+
 // Protopypes.
 void init_list();
 void enter();
@@ -28,6 +31,7 @@ void save();
 int menu_select();
 int find_free();
 void trim(char *);
+void find();
 
 int main() {
 	char choice;
@@ -43,11 +47,13 @@ int main() {
 			break;
 		case 3: list();
 			break;
-		case 4: save();
+		case 4: find();
 			break;
-		case 5: load();
+		case 5: save();
 			break;
-		case 6: exit(0);
+		case 6: load();
+			break;
+		case 7: exit(0);
 		}
 	}
 	return 0;
@@ -68,14 +74,15 @@ int menu_select() {
 	printf("1. Enter a Record.\n");
 	printf("2. Delete a Record.\n");
 	printf("3. List all the Records.\n");
-	printf("4. Save to file.\n");
-	printf("5. Load from file.\n");
-	printf("6. Quit!\n");
+	printf("4. Find a single record.\n");
+	printf("5. Save to file.\n");
+	printf("6. Load from file.\n");
+	printf("7. Quit!\n");
 	do {
 		printf("\nEnter your choice: ");
 		fgets(s, sizeof(s), stdin);
 		c = atoi(s);
-	} while (c < 0 || c > 6);
+	} while (c < 0 || c > 7);
 	return c;
 }
 
@@ -184,4 +191,30 @@ void trim(char *str) {
 	if (str[i] == '\n') {
 		str[i] = '\0';
 	}
+}
+
+void find() {
+	char record_num[11];
+	printf("Enter the record number: ");
+	fgets(record_num, 10, stdin);
+	long int recNum = atoi(record_num);
+	FILE *fp;
+	if ((fp = fopen("maillist", "rb")) == NULL) {
+		printf("Cannot open file.\n");
+		exit(1);
+	}
+	// Find the structure.
+	fseek(fp, recNum * sizeof(struct addr), SEEK_SET);
+	// Load the found struct into memory.
+	fread(&info, sizeof(struct addr), 1, fp);
+	fclose(fp);
+	// Display the found struct info.
+	if (info.name[0]) {
+		printf("Record Number: %ld\n", recNum);
+		printf("%s\n", info.name);
+		printf("%s\n", info.street);
+		printf("%s\n", info.city);
+		printf("%s, %s\n", info.state, info.zip);
+	}
+	printf("\n\n");
 }
